@@ -1,0 +1,66 @@
+name: Task
+description: Necessary work with no direct user-visible value — scaffolding, tooling, CI, refactors, spikes.
+title: "[Task] "
+labels: ["type:task", "status:needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the work cannot be demoed to a person. If it *can*, file a **User story**
+        instead so the acceptance criteria are written from the user's point of view.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs doing
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why now
+      description: Which story or phase this unblocks. A task that unblocks nothing is a candidate for closing.
+      placeholder: Blocks #14 and every other story that needs a test runner.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "P0 — must have"
+        - "P1 — should have"
+        - "P2 — nice to have"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "area:interceptor — agent hooks, MCP proxy, process interception"
+        - "area:policy-engine — rule matching, decisions, error codes"
+        - "area:local-model — local inference runtime and classifiers"
+        - "area:sandbox — filesystem / network / process confinement"
+        - "area:masking — PII, secret, and keyword handling"
+        - "area:audit-log — append-only decision record"
+        - "area:ui — policy editor, audit log viewer"
+        - "area:config — rule file format, loading, validation"
+        - "area:infra — CI/CD, packaging, distribution"
+        - "area:docs — phase documents, ADRs, README"
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition of done
+      description: Checkable outcomes. For a spike, the deliverable is a written recommendation or an ADR draft.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true

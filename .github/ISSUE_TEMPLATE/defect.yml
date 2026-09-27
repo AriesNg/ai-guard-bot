@@ -1,0 +1,129 @@
+name: Defect
+description: Behaviour that contradicts an approved document, an acceptance criterion, or a rule as written.
+title: "[Defect] "
+labels: ["type:defect", "status:needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Stop if this is a security issue.** A sandbox escape, a policy bypass, or data that
+        should have been masked appearing in output must be reported privately as a security
+        advisory — not here. Go back and use the "Security vulnerability" link.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: One or two sentences. Observed behaviour, not your theory of the cause.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: >-
+        Quote the source of truth this contradicts — a rule in the policy file, an acceptance
+        criterion on a story, or a line in an approved phase document.
+      placeholder: |
+        docs/01-discovery/requirements.md FR-04 says an unevaluable action is denied (fail-closed).
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, from a clean state. Include the policy rules in effect — a decision cannot be read without them.
+      value: |
+        1.
+        2.
+        3.
+
+        Policy rules in effect:
+        ```yaml
+        ```
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Impact if left unfixed, independent of how hard it is to fix.
+      options:
+        - "S1 — an action that should be denied is allowed, or the sandbox is bypassed"
+        - "S2 — a legitimate action is wrongly blocked, or the agent is unusable"
+        - "S3 — wrong error code, misleading message, or missing audit entry"
+        - "S4 — cosmetic or documentation-only"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - "area:interceptor — agent hooks, MCP proxy, process interception"
+        - "area:policy-engine — rule matching, decisions, error codes"
+        - "area:local-model — local inference runtime and classifiers"
+        - "area:sandbox — filesystem / network / process confinement"
+        - "area:masking — PII, secret, and keyword handling"
+        - "area:audit-log — append-only decision record"
+        - "area:ui — policy editor, audit log viewer"
+        - "area:config — rule file format, loading, validation"
+        - "area:infra — CI/CD, packaging, distribution"
+        - "area:docs — phase documents, ADRs, README"
+    validations:
+      required: true
+
+  - type: input
+    id: error-code
+    attributes:
+      label: Error code / rule id
+      description: The machine-readable code and rule id the guard returned, if any.
+      placeholder: e.g. GUARD_DENY_PATH / rule "no-ssh-read"
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - OS and version:
+        - Host AI agent and version:
+        - AI Guard Bot version / commit:
+        - Local model and runtime:
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Audit log / logs
+      description: >-
+        Relevant audit entries or structured events. **Redact before pasting** — logs from this
+        product can contain the very content it exists to protect.
+      render: text
+    validations:
+      required: false
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Is this a regression?
+      options:
+        - "Unknown"
+        - "No — never worked"
+        - "Yes — worked in an earlier commit or release"
+    validations:
+      required: true
+
+  - type: input
+    id: regressed-from
+    attributes:
+      label: Last known good version
+      description: Only if you answered "Yes" above.
+    validations:
+      required: false

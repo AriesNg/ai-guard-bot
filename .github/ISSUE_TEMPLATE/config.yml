@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/AriesNg/ai-guard-bot/security/advisories/new
+    about: >-
+      A sandbox escape, policy bypass, or leak of data that should have been masked is a security
+      report, not a public defect. Report it privately so it is not disclosed before a fix exists.
+  - name: Process or phase-gate question
+    url: https://github.com/AriesNg/ai-guard-bot/discussions
+    about: >-
+      Questions about the phase-gated workflow in docs/ belong in Discussions. A decision that
+      comes out of one is recorded as an ADR in docs/05-adr/, not as an issue.

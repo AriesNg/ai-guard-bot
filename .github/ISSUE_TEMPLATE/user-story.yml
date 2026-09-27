@@ -1,0 +1,122 @@
+name: User story
+description: A unit of user-visible value, written from the user's point of view.
+title: "[Story] "
+labels: ["type:story", "status:needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One story = one INVEST-sized slice of value (Independent, Negotiable, Valuable,
+        Estimable, Small, Testable). If it cannot be demoed to a person, it is a **Task**, not a
+        story. See `docs/07-implementation/issue-tracking.md` for the label taxonomy and lifecycle.
+
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: One sentence, in the user's voice.
+      placeholder: |
+        As a developer running Claude Code on a work laptop,
+        I want a shell command that touches ~/.ssh to be denied with a named rule id,
+        so that I can see which policy stopped it without reading the audit log.
+    validations:
+      required: true
+
+  - type: input
+    id: persona
+    attributes:
+      label: Persona
+      description: Which persona from `docs/01-discovery/requirements.md` this serves.
+      placeholder: e.g. Solo developer / Platform engineer / Security reviewer
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: >-
+        P0 is must-have for the release in scope — if it is missing, the release does not ship.
+        Be honest: everything cannot be P0.
+      options:
+        - "P0 — must have"
+        - "P1 — should have"
+        - "P2 — nice to have"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the system this lands in.
+      options:
+        - "area:interceptor — agent hooks, MCP proxy, process interception"
+        - "area:policy-engine — rule matching, decisions, error codes"
+        - "area:local-model — local inference runtime and classifiers"
+        - "area:sandbox — filesystem / network / process confinement"
+        - "area:masking — PII, secret, and keyword handling"
+        - "area:audit-log — append-only decision record"
+        - "area:ui — policy editor, audit log viewer"
+        - "area:config — rule file format, loading, validation"
+        - "area:infra — CI/CD, packaging, distribution"
+        - "area:docs — phase documents, ADRs, README"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: >-
+        Given / When / Then, one block per scenario. Cover the happy path **and** the failure
+        path — this project fails closed, so the deny path is part of the story, not a follow-up.
+      value: |
+        - [ ] Given <state>, when <action>, then <observable result>
+        - [ ] Given <state>, when <action that must be denied>, then <error code and rule id returned>
+    validations:
+      required: true
+
+  - type: textarea
+    id: nfr
+    attributes:
+      label: Non-functional targets
+      description: >-
+        Quantified, or write "none beyond the project defaults". "Fast" is not a target;
+        "P95 added latency < 50 ms for deterministic evaluation" is.
+      placeholder: |
+        - P95 added latency < 50 ms (deterministic path)
+        - No action content leaves the machine
+        - Keyboard-navigable, WCAG 2.1 AA (UI stories only)
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceability
+    attributes:
+      label: Traceability
+      description: >-
+        Link the phase documents this story derives from, and any ADR that constrains it. A story
+        with no upstream document may be running ahead of the phase gate.
+      placeholder: |
+        Requirement: docs/01-discovery/requirements.md — FR-07
+        Design: docs/03-system-design/architecture.md
+        Constrained by: docs/05-adr/001-use-react-and-typescript.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Explicitly out of scope
+      description: What a reviewer might reasonably expect here but should not get. Reduces scope creep.
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Blocking issues (`Blocked by #12`) or open questions that must be answered first.
+    validations:
+      required: false

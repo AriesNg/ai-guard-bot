@@ -65,12 +65,32 @@ Nothing to run yet. The script names in `package.json` (`dev`, `build`, `start`,
 Next.js + TypeScript + ESLint + Prettier, then wire `lint → test → build`. This section gets
 real commands as part of that scaffold story.
 
-This directory is also not yet a git repository.
+## Issue Tracking
+
+**User stories, tasks, and defects are GitHub issues** —
+[`AriesNg/ai-guard-bot/issues`](https://github.com/AriesNg/ai-guard-bot/issues). Documents in
+`docs/` remain the record of requirements, designs, and decisions; issues are the record of work.
+The full contract — three issue forms, the label taxonomy, the lifecycle, and how the phase gate
+still applies — is in
+[`docs/07-implementation/issue-tracking.md`](docs/07-implementation/issue-tracking.md).
+
+```bash
+./.github/bootstrap-labels.sh                  # create the label taxonomy (idempotent)
+gh issue create --template user-story.yml      # file a story
+gh issue create --template defect.yml          # file a defect
+gh issue list --label "type:story" --label P0  # the P0 backlog
+```
+
+Blank issues are disabled — use a form. Security issues (sandbox escape, policy bypass, leaked
+data that should have been masked) go to a
+[private advisory](https://github.com/AriesNg/ai-guard-bot/security/advisories/new), never a
+public issue.
 
 ## Project Structure
 
 ```
 .ai/              # AI instructions, templates, rules — human-owned, do not write here
+.github/          # Issue forms, PR template, label bootstrap script
 docs/             # Phase-by-phase documentation
 src/              # Application source code (empty)
 tests/            # Test suites (empty)
@@ -92,7 +112,7 @@ Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before contr
 
 | # | Phase | Folder | Prerequisite | Status |
 |---|-------|--------|--------------|--------|
-| 1 | Discovery — requirements, personas, user stories | [`docs/01-discovery/`](docs/01-discovery/) | — | ⬜ Not started |
+| 1 | Discovery — requirements, personas, stories filed as issues | [`docs/01-discovery/`](docs/01-discovery/) | — | ⬜ Not started |
 | 2 | UX Design — flows, wireframes, design system | [`docs/02-ux-design/`](docs/02-ux-design/) | Discovery approved | ⬜ Not started |
 | 3 | System Design — architecture, data model, APIs | [`docs/03-system-design/`](docs/03-system-design/) | UX Design approved | ⬜ Not started |
 | 4 | Solution Design — components, state, testing strategy | [`docs/04-solution-design/`](docs/04-solution-design/) | System Design approved | ⬜ Not started |
