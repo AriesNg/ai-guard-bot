@@ -1,0 +1,17 @@
+{
+  "name": "project-name",
+  "version": "0.0.1",
+  "private": true,
+  "description": "",
+  "scripts": {
+    "dev": "",
+    "build": "",
+    "start": "",
+    "lint": "",
+    "test": "",
+    "test:e2e": "",
+    "typecheck": ""
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
