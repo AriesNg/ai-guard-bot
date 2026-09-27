@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+build/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+coverage/
+.turbo/
+.cache/
+
+# Local tooling state
+.memsearch/
