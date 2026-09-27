@@ -21,6 +21,40 @@ with a path to extending the same policy engine to AI **desktop** applications.
 - **Security, compliance, and risk functions** that need an enforcement point and an audit
   trail for AI agent activity, without banning the tools outright.
 
+## Background / Existing Problems
+
+The trigger for this project is the way developers actually use AI CLIs today, not a
+hypothetical risk.
+
+1. **Blanket approval is the default in practice.** Tools such as Claude Code ship interactive
+   permission prompts, but a prompt on every file write and every shell command interrupts the
+   work it is meant to protect. The path of least resistance is to launch the agent with full
+   permissions (`--dangerously-skip-permissions` and its equivalents) and accept whatever it
+   does. The control that exists is therefore routinely switched off — not because developers
+   do not care, but because the granularity is wrong: they are asked about individual actions
+   when what they hold in their head is a handful of high-level intentions.
+
+2. **Per-tool permission configuration costs more effort than it is worth.** Each CLI does have
+   a settings mechanism (allow/deny lists, hook configuration), but authoring one means
+   enumerating concrete tool names, command prefixes, and glob patterns up front, in a
+   tool-specific syntax, and then maintaining it as the agent finds new commands. The effort is
+   front-loaded and never finished, so most developers never start. And the work does not
+   transfer: a policy written for one CLI has to be rewritten for the next.
+
+3. **There is no record of what the agent did.** Once permissions are blanket-approved, the
+   only trace is terminal scrollback. There is no queryable history of which actions were
+   attempted, which were risky, or what the agent read and sent outward — so neither the
+   developer nor a security reviewer can answer "what happened in that session?" after the fact.
+
+**The intended shift.** The developer writes a small number of rules in plain language
+("never touch production credentials", "stay inside this repository", "no network calls to
+anything but our package registry"). A small model running locally applies those rules to each
+concrete action the agent attempts and decides on the developer's behalf — allow, mask, or
+reject — so the developer is neither interrupted nor forced to pre-enumerate every case. Every
+decision is recorded, making the session fully observable after the fact. Intent is authored
+once at a level a human can actually hold; the translation to specific actions is the tool's
+job, not the developer's.
+
 ## Why
 
 AI CLI agents execute arbitrary commands with the full privileges of the user who launched them.
@@ -46,9 +80,12 @@ leave the machine unmasked, and (c) everything the agent did is recorded.
    served via Ollama or an equivalent local runtime) handles judgement calls that static rules
    cannot express — intent classification, prompt-injection detection, semantic PII detection.
    No policy decision requires a network call.
-3. **Configurable rules and hooks.** Declarative rule file (allow/deny/ask/mask) matching on
-   tool name, command, path, network destination, and content. User-supplied hooks for custom
-   checks. Rules are versionable and shareable across a team.
+3. **High-level rules, not enumerated permissions.** The developer authors a small set of
+   intent-level rules in plain language; the engine — deterministic matchers plus the local
+   model — resolves them against concrete actions. A declarative rule file (allow/deny/ask/mask
+   matching tool name, command, path, network destination, content) and user-supplied hooks
+   remain available for cases needing exactness. Rules are versionable, shareable across a
+   team, and portable across every supported CLI.
 4. **Structured violation responses.** On denial, return a stable error code plus the list of
    violated rules, in a form the calling agent can parse and act on rather than a free-text
    refusal.
@@ -56,7 +93,9 @@ leave the machine unmasked, and (c) everything the agent did is recorded.
    filesystem, network, and process allowlist.
 6. **PII and secret handling.** Detect and mask or strip PII, credentials, and user-defined
    sensitive keywords from both what the agent is about to send outward and what it receives.
-7. **Audit log.** Append-only record of every intercepted action and the decision taken.
+7. **Full observability.** An append-only audit log of every intercepted action, the decision
+   taken, the rule that drove it, and the evaluation latency — queryable after the fact, so a
+   whole agent session can be reconstructed rather than read out of terminal scrollback.
 
 ## Non-Functional Requirements
 

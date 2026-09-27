@@ -1,18 +1,20 @@
 # 01 — Discovery
 
-**Status**: ⬜ Not started
+**Status**: 🟡 Draft — awaiting human review
+**Documents**: `requirements.md`, `user-personas.md` (both Draft, 2026-09-28)
+**Blocking approval**: Open Questions Q-02, Q-03, Q-04, Q-06 in `requirements.md`
 
 ## Purpose
 Understand the problem, users, market, and constraints before designing anything.
 
 ## Deliverables
-- [ ] Problem statement
-- [ ] User personas (2-4)
-- [ ] User stories (P0/P1/P2)
-- [ ] Functional requirements
-- [ ] Non-functional requirements
-- [ ] Constraints & risks
-- [ ] Scope boundaries
+- [x] Problem statement
+- [x] User personas (4)
+- [x] User stories (P0/P1/P2) — S-01 … S-23
+- [x] Functional requirements — FR-01 … FR-26
+- [x] Non-functional requirements — quantified
+- [x] Constraints & risks — R-01 … R-07 with mitigations
+- [x] Scope boundaries — in-scope and 12 explicit out-of-scope items
 
 ## How to use this phase
 1. AI reads `.ai/templates/discovery.md`

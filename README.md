@@ -12,9 +12,10 @@ It targets AI **CLIs** first (Claude Code, Codex CLI, Gemini CLI, and others), w
 extending the same policy engine to AI **desktop** applications.
 
 > **Project status: design phase.** There is no application code yet. `src/`, `tests/`, and
-> `infrastructure/` are empty, `package.json` has no dependencies and no real scripts, and every
-> documentation phase is still ⬜ Not started. The substance of this repo today is the process
-> contract in `.ai/` and the phase-gated document tree in `docs/`.
+> `infrastructure/` are empty, and `package.json` has no dependencies and no real scripts.
+> Phase 1 (Discovery) and Phase 4 (Solution Design) are drafted and awaiting review; Phases 2, 3,
+> 6 and 7 are not started. The substance of this repo today is the process contract in `.ai/`, the
+> phase-gated document tree in `docs/`, and those two draft phases.
 
 ## Core Capabilities
 
@@ -65,8 +66,6 @@ Nothing to run yet. The script names in `package.json` (`dev`, `build`, `start`,
 Next.js + TypeScript + ESLint + Prettier, then wire `lint → test → build`. This section gets
 real commands as part of that scaffold story.
 
-This directory is also not yet a git repository.
-
 ## Project Structure
 
 ```
@@ -92,10 +91,10 @@ Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before contr
 
 | # | Phase | Folder | Prerequisite | Status |
 |---|-------|--------|--------------|--------|
-| 1 | Discovery — requirements, personas, user stories | [`docs/01-discovery/`](docs/01-discovery/) | — | ⬜ Not started |
+| 1 | Discovery — requirements, personas, user stories | [`docs/01-discovery/`](docs/01-discovery/) | — | 🟡 Draft — awaiting review |
 | 2 | UX Design — flows, wireframes, design system | [`docs/02-ux-design/`](docs/02-ux-design/) | Discovery approved | ⬜ Not started |
 | 3 | System Design — architecture, data model, APIs | [`docs/03-system-design/`](docs/03-system-design/) | UX Design approved | ⬜ Not started |
-| 4 | Solution Design — components, state, testing strategy | [`docs/04-solution-design/`](docs/04-solution-design/) | System Design approved | ⬜ Not started |
+| 4 | Solution Design — components, state, testing strategy | [`docs/04-solution-design/`](docs/04-solution-design/) | System Design approved | 🟡 Draft — written ahead of its prerequisite on request; the assumed architecture in `component-design.md` §0 awaits Phase 3 |
 | 5 | ADRs — architecture decisions with rationale | [`docs/05-adr/`](docs/05-adr/) | — | ⬜ Not started (ADR-001 Accepted) |
 | 6 | Infrastructure — deployment, CI/CD, monitoring | [`docs/06-infrastructure/`](docs/06-infrastructure/) | System Design approved (may overlap with Solution Design) | ⬜ Not started |
 | 7 | Implementation — sprint plans and progress | [`docs/07-implementation/`](docs/07-implementation/) | Phases 1–6 approved, at least for Sprint 1's scope | ⬜ Not started |
