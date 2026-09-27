@@ -65,12 +65,12 @@ Nothing to run yet. The script names in `package.json` (`dev`, `build`, `start`,
 Next.js + TypeScript + ESLint + Prettier, then wire `lint → test → build`. This section gets
 real commands as part of that scaffold story.
 
-This directory is also not yet a git repository.
-
 ## Project Structure
 
 ```
 .ai/              # AI instructions, templates, rules — human-owned, do not write here
+MEMORY.md         # Shared project memory — current state, decisions, gotchas
+LEARN.md          # Append-only learnings from feedback and PR review
 docs/             # Phase-by-phase documentation
 src/              # Application source code (empty)
 tests/            # Test suites (empty)
@@ -87,6 +87,13 @@ The model is a spiral, not a waterfall: later learning may reopen an earlier pha
 case the affected document is **superseded** rather than silently edited.
 
 Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before contributing.
+
+Two checked-in files carry the shared context between contributors, human and AI alike:
+
+- [`MEMORY.md`](MEMORY.md) — current state, decisions in force, and known gotchas. Read it
+  before starting work.
+- [`LEARN.md`](LEARN.md) — append-only learnings from user feedback and PR review, so the same
+  mistake is not repeated. Add an `L-NNN` entry when feedback is general enough to matter again.
 
 ## Phase Status
 

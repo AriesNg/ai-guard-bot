@@ -13,10 +13,21 @@ The substance of the repo is the **process contract** in `.ai/` and the **phase-
 tree** in `docs/`. Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before
 doing anything — they define the operating mode that the rest of this file summarizes.
 
-The directory name (`0004-ai-guard-bot`) hints at the intended product, but
-`.ai/context/project-brief.md` is still an unfilled template and `README.md` still says
-`{Project Name}`. **Do not infer the product from the folder name.** If a task requires knowing
-what is being built, ask the human to fill in the project brief first.
+**Do not infer the product from the folder name.** Take the product definition from
+`.ai/context/project-brief.md` (now filled in) and `README.md`. If a task requires knowing
+something neither states, ask the human rather than guessing.
+
+## Read these first
+
+- **`MEMORY.md`** — shared project memory: current state, decisions in force, and known
+  gotchas. Read it before making non-trivial changes, and update it in the same commit that
+  makes one of its facts untrue.
+- **`LEARN.md`** — append-only record of corrections from user feedback and PR comments. Add an
+  `L-NNN` entry whenever feedback is general enough to matter again; never rewrite or delete
+  past entries, supersede them.
+
+Both are committed so every contributor, human or AI, starts from the same picture. Local agent
+caches such as `.memsearch/` are per-machine, gitignored, and are not a substitute for either.
 
 ## Commands
 
