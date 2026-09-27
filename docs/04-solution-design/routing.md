@@ -5,7 +5,8 @@
 **Approved by**: _pending_
 
 > **Phase-gate note.** Drafted ahead of the Phase 3 gate at the product owner's request; rests on
-> the assumptions in [`component-design.md` §0](component-design.md#0-assumed-architecture-pending-phase-3).
+> the assumptions in [`component-design.md` §0](component-design.md#0-assumed-architecture-pending-phase-3),
+> each of which is now filed as a Proposed ADR in [`../05-adr/`](../05-adr/README.md).
 > The wire contracts below are a Phase 4 *shape*; their canonical schemas belong in Phase 3's
 > `api-design.md`.
 
@@ -201,4 +202,7 @@ security boundary that does not exist.
 | ADR-002 | Core language | RPC codec and code-generation approach for `shared/api` |
 
 **Related**: [`component-design.md`](component-design.md) ·
-[`state-management.md`](state-management.md) · [`testing-strategy.md`](testing-strategy.md)
+[`state-management.md`](state-management.md) · [`testing-strategy.md`](testing-strategy.md) · ADRs
+[003](../05-adr/003-local-daemon-over-unix-socket.md) (socket transport, method split),
+[007](../05-adr/007-cli-integration-strategy.md) (`GuardError` rendered per host),
+[009](../05-adr/009-fail-closed-default.md) (adapter timeout, error codes)

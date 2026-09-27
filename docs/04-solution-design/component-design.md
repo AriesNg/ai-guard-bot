@@ -8,7 +8,9 @@
 > the prerequisite, and Phases 2 and 3 are still ⬜ Not started. This document was drafted ahead
 > of that gate at the product owner's explicit request. Everything in
 > [§0 Assumed architecture](#0-assumed-architecture-pending-phase-3) is therefore an
-> **assumption, not a decision** — Phase 3 must ratify it (or supersede this document). The
+> **assumption, not a decision** — each is now written up as a **Proposed ADR** in
+> [`../05-adr/`](../05-adr/README.md) (ADR-002 … ADR-009), and Phase 3 must accept those or
+> supersede this document. The
 > component boundaries below are derived from the Discovery requirements
 > ([`../01-discovery/requirements.md`](../01-discovery/requirements.md)) and are stable against
 > most of the open questions; the two that would force a rewrite are flagged inline.
@@ -20,19 +22,19 @@
 Phase 4 cannot be written without an architecture to translate. The minimum set of assumptions,
 each traceable to a Discovery requirement:
 
-| # | Assumption | Driven by | If Phase 3 decides otherwise |
-|---|---|---|---|
-| A-1 | A long-lived local **daemon** holds the policy, the loaded model handle, and the log writer; per-action work is a request to it. | Cold start < 2 s excl. model, < 15 s incl. (NFR); model load cannot be per-action | Structural rewrite. Per-invocation processes cannot meet the model-path latency budget. |
-| A-2 | Each supported CLI gets a thin **adapter** — an executable the host invokes through its own hook interface — that normalises the host payload into one canonical `Action` and calls the daemon over a Unix domain socket. | FR-07, FR-08, R-05 (contain vendor breakage in one adapter) | Adapter layer changes shape; the core is unaffected. |
-| A-3 | Transport is **JSON-RPC over a Unix domain socket** with filesystem permissions, not a TCP port. | Security NFR (agent must not reach the engine), Privacy NFR | Transport swap only; `DecisionService` contract unchanged. |
-| A-4 | Evaluation is a **pipeline of evaluators** in fixed precedence: deterministic → hooks → model, short-circuiting on first decision. | FR-03, FR-11, ≥ 80 % actions resolved without the model | None — this is required by FR-11 regardless. |
-| A-5 | The **audit log** is an append-only, hash-chained local store with a query index; the record is durable before the decision returns. | FR-19–FR-22, "zero decisions unlogged" | Storage engine swap behind `AuditStore`. |
-| A-6 | The **UI surface** (P2) is a separate Next.js app reading the daemon's read-only query API — it is not in the enforcement path. | ADR-001 binding for UI; Q-06 open | If Q-06 says no UI in v1, §3 is deferred wholesale; §1–2 stand. |
+| # | Assumption | Now proposed as | Driven by | If Phase 3 decides otherwise |
+|---|---|---|---|---|
+| A-1 | A long-lived local **daemon** holds the policy, the loaded model handle, and the log writer; per-action work is a request to it. | [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) | Cold start < 2 s excl. model, < 15 s incl. (NFR); model load cannot be per-action | Structural rewrite. Per-invocation processes cannot meet the model-path latency budget. |
+| A-2 | Each supported CLI gets a thin **adapter** — an executable the host invokes through its own hook interface — that normalises the host payload into one canonical `Action` and calls the daemon over a Unix domain socket. | [ADR-007](../05-adr/007-cli-integration-strategy.md) | FR-07, FR-08, R-05 (contain vendor breakage in one adapter) | Adapter layer changes shape; the core is unaffected. |
+| A-3 | Transport is **JSON-RPC over a Unix domain socket** with filesystem permissions, not a TCP port. | [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) | Security NFR (agent must not reach the engine), Privacy NFR | Transport swap only; `DecisionService` contract unchanged. |
+| A-4 | Evaluation is a **pipeline of evaluators** in fixed precedence: deterministic → hooks → model, short-circuiting on first decision. | [ADR-004](../05-adr/004-layered-policy-model.md), [ADR-009](../05-adr/009-fail-closed-default.md) | FR-03, FR-11, ≥ 80 % actions resolved without the model | None — this is required by FR-11 regardless. |
+| A-5 | The **audit log** is an append-only, hash-chained local store with a query index; the record is durable before the decision returns. | [ADR-006](../05-adr/006-audit-log-integrity.md) | FR-19–FR-22, "zero decisions unlogged" | Storage engine swap behind `AuditStore`. |
+| A-6 | The **UI surface** (P2) is a separate Next.js app reading the daemon's read-only query API — it is not in the enforcement path. | [ADR-001](../05-adr/001-use-react-and-typescript.md), [ADR-002](../05-adr/002-enforcement-core-language.md) | ADR-001 binding for UI; Q-06 open | If Q-06 says no UI in v1, §3 is deferred wholesale; §1–2 stand. |
 
-### Enforcement-core language — open, recommendation offered
+### Enforcement-core language — now [ADR-002](../05-adr/002-enforcement-core-language.md) (Proposed)
 
-Not settled by ADR-001, which governs UI only. Per `.ai/rules/general.md`, options with a
-recommendation rather than an assumption:
+Not settled by ADR-001, which governs UI only. Per `.ai/rules/general.md`, the options were
+weighed rather than assumed; the conclusion is now filed as ADR-002:
 
 | Option | For | Against |
 |---|---|---|
@@ -41,7 +43,8 @@ recommendation rather than an assumption:
 | **Node + TypeScript** | One language across core and UI; fastest to build; shares types with the Next.js surface | Node process start alone (~40–80 ms) blows the per-action overhead budget unless every adapter is native anyway; OS sandbox integration needs native modules, reintroducing the build complexity Rust would have given outright |
 
 **Recommendation**: Rust for adapter + daemon, TypeScript/Next.js for the UI, with the wire
-contract as the boundary. To be recorded as **ADR-002** in Phase 3. The module design below is
+contract as the boundary — recorded as [**ADR-002**](../05-adr/002-enforcement-core-language.md),
+Proposed, with its rejected alternatives (Node, Go, C/C++, split shim) argued there. The module design below is
 written to be language-neutral; type notation is TypeScript-flavoured for readability, and the
 canonical form of every contract is the JSON schema in `api-design.md` (Phase 3).
 
@@ -191,7 +194,7 @@ interface EvaluatorResult {
 - `HookEvaluator` — spawns user hook programs with the action on stdin (FR-06). Every hook has a
   hard timeout; a timed-out or crashed hook yields **deny**, never a skip, and the failure is a
   distinct audit event.
-- `ModelEvaluator` — only reached when nothing above decided (FR-11). Constrained decoding to the
+- `ModelEvaluator` — only reached when nothing above decided (FR-11); runtime is pluggable behind a port per [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). Constrained decoding to the
   `DecisionKind` enum plus a confidence and a reason; the model's output is parsed as data and can
   never name an action to take (Security NFR). Model input carries the action and the intent rules
   and is explicitly framed as untrusted content.
@@ -201,7 +204,7 @@ interface EvaluatorResult {
   evaluator and latency onto the record, and honours dry-run by computing and logging but
   returning `allow` (FR-16).
 
-**Fail-closed is implemented as a default, not a branch**: the pipeline's initial decision value
+**Fail-closed is implemented as a default, not a branch** ([ADR-009](../05-adr/009-fail-closed-default.md)): the pipeline's initial decision value
 is `deny` with reason `evaluator-unavailable`, and evaluators can only replace it. There is no
 code path where absence of a decision yields an allow.
 
@@ -233,8 +236,9 @@ interface Confinement {
 }
 ```
 
-The concrete primitive is a **Phase 3 decision gated on Q-02 (platforms) and Q-03 (threat
-model)**, and this is the one place where an unanswered open question genuinely blocks design
+The concrete primitive is gated on Q-02 (platforms) and Q-03 (threat model); what *is* decided —
+OS-native primitives only, boundary-as-data, a test per claim, and no absolute isolation claim — is
+[ADR-008](../05-adr/008-sandbox-confinement-primitive.md), and this is the one place where an unanswered open question genuinely blocks design
 rather than detail. `BoundaryDescription` exists so the product can state what it does not stop
 (FR-18) as data rather than prose, and so the health check can report a weaker boundary honestly.
 

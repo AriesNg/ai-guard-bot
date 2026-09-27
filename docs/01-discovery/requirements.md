@@ -311,10 +311,10 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 | Constraint | Detail |
 |---|---|
 | **Binding ADR** | ADR-001 (Accepted): Next.js 14+ App Router, TypeScript, RSC by default — governs any web/UI surface. |
-| **Open by design** | The enforcement core's language/runtime is deliberately *not* settled by ADR-001; startup time, latency, and OS-level sandboxing are different constraints. A new ADR in Phase 3 decides it. |
-| **Local model runtime** | Pluggable (Ollama or equivalent). No hard dependency on one model or vendor. |
+| **Open by design** | The enforcement core's language/runtime is deliberately *not* settled by ADR-001; startup time, latency, and OS-level sandboxing are different constraints. Now proposed in [ADR-002](../05-adr/002-enforcement-core-language.md) (Rust core, TypeScript UI) — awaiting acceptance at the Phase 3 gate. |
+| **Local model runtime** | Pluggable (Ollama or equivalent). No hard dependency on one model or vendor — see [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). |
 | **No vendor SDK in the enforcement path** | And no cloud service in the policy-decision path. |
-| **Host agents unmodified** | Integration through documented hook/permission interfaces; no forks or patches. |
+| **Host agents unmodified** | Integration through documented hook/permission interfaces; no forks or patches — see [ADR-007](../05-adr/007-cli-integration-strategy.md). |
 | **Hardware floor** | Must run on a developer laptop with 16 GB RAM alongside the IDE and the agent — this caps model size and is the real constraint behind the latency targets. |
 | **Compliance** | Not a certified control. The audit log is designed to be *evidence* for SOC 2 / ISO 27001 change-and-access narratives, but no certification claim is made in v1. |
 | **Timeline** | Not yet set (Open Question Q-07). |
@@ -497,4 +497,5 @@ answered before Discovery is approved, because each changes requirements rather 
 - `.ai/context/project-brief.md` — source brief, including Background / Existing Problems
 - [`user-personas.md`](user-personas.md) — persona detail
 - [`../05-adr/001-use-react-and-typescript.md`](../05-adr/001-use-react-and-typescript.md) — binding for any UI surface
+- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-009 (Proposed), which answer the architectural questions these requirements raise; the index's "Blocked on human input" table maps Q-01 … Q-06 onto the ADRs each one gates
 - [`../04-solution-design/`](../04-solution-design/) — Phase 4 documents, drafted ahead of the Phase 3 gate (see the note at the top of each)

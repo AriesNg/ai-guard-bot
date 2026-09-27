@@ -5,8 +5,10 @@
 **Approved by**: _pending_
 
 > **Phase-gate note.** Drafted ahead of the Phase 3 gate at the product owner's request; rests on
-> the assumptions in [`component-design.md` §0](component-design.md#0-assumed-architecture-pending-phase-3).
-> Concrete tool choices below marked *(pending ADR-002)* depend on the enforcement-core language.
+> the assumptions in [`component-design.md` §0](component-design.md#0-assumed-architecture-pending-phase-3),
+> each of which is now filed as a Proposed ADR in [`../05-adr/`](../05-adr/README.md).
+> Tool choices below marked *(pending ADR-002)* depend on
+> [ADR-002](../05-adr/002-enforcement-core-language.md) being accepted.
 
 ---
 
@@ -228,4 +230,8 @@ flowchart LR
 
 **Related**: [`component-design.md`](component-design.md) ·
 [`state-management.md`](state-management.md) · [`routing.md`](routing.md) ·
-[`../01-discovery/requirements.md`](../01-discovery/requirements.md)
+[`../01-discovery/requirements.md`](../01-discovery/requirements.md) ·
+[`../05-adr/README.md`](../05-adr/README.md) — the three CI gates in §2 are how
+[ADR-004](../05-adr/004-layered-policy-model.md), [ADR-007](../05-adr/007-cli-integration-strategy.md),
+[ADR-008](../05-adr/008-sandbox-confinement-primitive.md) and
+[ADR-009](../05-adr/009-fail-closed-default.md) are held to their claims

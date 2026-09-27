@@ -34,7 +34,7 @@ extending the same policy engine to AI **desktop** applications.
 | Layer | Technology | Basis |
 |-------|-----------|-------|
 | Web/UI surface (policy editor, audit log viewer) | Next.js 14+ App Router, TypeScript, React Server Components by default | [ADR-001](docs/05-adr/001-use-react-and-typescript.md) — **Accepted**, binding |
-| Enforcement core (interceptor, policy engine, sandbox) | **Open question** — different constraints (startup time, latency, OS-level sandboxing); to be settled by a new ADR in Phase 3, not assumed from ADR-001 | `.ai/context/project-brief.md` |
+| Enforcement core (interceptor, policy engine, sandbox) | **Rust proposed** — different constraints from the UI (process-start cost against a P95 < 10 ms budget, OS confinement APIs); ADR-001 is not assumed to govern it | [ADR-002](docs/05-adr/002-enforcement-core-language.md) — **Proposed** |
 | Local model runtime | Pluggable local inference layer (Ollama or equivalent), not a hard dependency on one model | `.ai/context/project-brief.md` |
 | Infrastructure | Not yet decided (Phase 6) | — |
 
@@ -95,7 +95,7 @@ Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before contr
 | 2 | UX Design — flows, wireframes, design system | [`docs/02-ux-design/`](docs/02-ux-design/) | Discovery approved | ⬜ Not started |
 | 3 | System Design — architecture, data model, APIs | [`docs/03-system-design/`](docs/03-system-design/) | UX Design approved | ⬜ Not started |
 | 4 | Solution Design — components, state, testing strategy | [`docs/04-solution-design/`](docs/04-solution-design/) | System Design approved | 🟡 Draft — written ahead of its prerequisite on request; the assumed architecture in `component-design.md` §0 awaits Phase 3 |
-| 5 | ADRs — architecture decisions with rationale | [`docs/05-adr/`](docs/05-adr/) | — | ⬜ Not started (ADR-001 Accepted) |
+| 5 | ADRs — architecture decisions with rationale | [`docs/05-adr/`](docs/05-adr/) | — | 🟡 Draft (ADR-001 Accepted; 002–009 Proposed) |
 | 6 | Infrastructure — deployment, CI/CD, monitoring | [`docs/06-infrastructure/`](docs/06-infrastructure/) | System Design approved (may overlap with Solution Design) | ⬜ Not started |
 | 7 | Implementation — sprint plans and progress | [`docs/07-implementation/`](docs/07-implementation/) | Phases 1–6 approved, at least for Sprint 1's scope | ⬜ Not started |
 

@@ -5,7 +5,8 @@
 **Approved by**: _pending_
 
 > **Phase-gate note.** Drafted ahead of the Phase 3 gate at the product owner's request; rests on
-> the assumptions in [`component-design.md` §0](component-design.md#0-assumed-architecture-pending-phase-3).
+> the assumptions in [`component-design.md` §0](component-design.md#0-assumed-architecture-pending-phase-3),
+> each of which is now filed as a Proposed ADR in [`../05-adr/`](../05-adr/README.md).
 
 This product has **two distinct state problems**, and conflating them would be the main design
 error available here:
@@ -226,4 +227,8 @@ audit log when it simply cannot reach the engine actively misleads the person re
 | R-07 (agent weakens its guard) | A.4, B.2 read-only API |
 
 **Related**: [`component-design.md`](component-design.md) · [`routing.md`](routing.md) ·
-[`testing-strategy.md`](testing-strategy.md)
+[`testing-strategy.md`](testing-strategy.md) · ADRs
+[004](../05-adr/004-layered-policy-model.md) (policy immutability, precedence),
+[005](../05-adr/005-pluggable-local-model-runtime.md) (bounded model queue),
+[006](../05-adr/006-audit-log-integrity.md) (single-writer hash chain),
+[009](../05-adr/009-fail-closed-default.md) (deny on saturation)
