@@ -13,7 +13,7 @@ error available here:
 
 1. **Enforcement-core state** — authoritative, correctness-critical, lives in the daemon. A bug
    here means a wrong allow.
-2. **UI state** — derived, disposable, lives in the browser (P2, gated on Q-06). A bug here means
+2. **UI state** — derived, disposable, lives in the UI process (a read-only TUI per Q-06). A bug here means
    a confusing screen.
 
 The core never reads UI state. The UI never holds authoritative state.
@@ -116,16 +116,23 @@ any state-recovery machinery that could itself restore a stale allow.
 
 ---
 
-## Part B — UI state (P2, gated on Q-06)
+## Part B — UI state (a read-only TUI)
 
-> **Provisional.** Written assuming ADR-001's Next.js server (RSC, Server Actions). ADR-001 is
-> superseded by [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md), which forbids a
-> server runtime or listener shipping with the product and defers the UI stack to Q-06. Where this
-> part says "Server Action", read "an RPC to the daemon over the existing Unix socket" — and note
-> that per ADR-010 item 3 the UI is **read-only**, so the policy-write flows below belong to the
-> CLI. The *state inventory and the loading/error requirements remain valid*.
-
-Applies only if Q-06 puts a UI in v1.
+> **Re-based 2026-10-02 (Q-06).** Written assuming ADR-001's Next.js server (RSC, Server Actions);
+> ADR-001 is superseded by
+> [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md) and v1's UI is a **read-only TUI**
+> in the same binary ([ADR-011](../05-adr/011-v1-scope-envelope.md)). Read this part with three
+> substitutions, under which the state inventory and the loading/error requirements below remain
+> valid as written:
+>
+> - "Server Action" → **an RPC to the daemon over the existing Unix socket.**
+> - "browser" / "client bundle" → **the TUI process**, which shares the CLI's binary and config, so
+>   there is no hydration boundary and no serialisation of state across a network hop.
+> - Every **policy-write flow belongs to the CLI**, not here (ADR-010 item 3): the TUI has no write
+>   path, which removes optimistic updates and draft reconciliation from this part entirely.
+>
+> What genuinely does not survive is any state that existed only to bridge a server/client split.
+> A TUI holds its view state in process memory for the lifetime of one invocation.
 
 ### B.1 Global state — what, why, tool
 

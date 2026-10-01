@@ -16,7 +16,7 @@ the least important of them, so it comes third.
 1. **Daemon RPC surface** — the enforcement path. Latency-budgeted, authenticated by filesystem
    permissions, split read/write.
 2. **CLI command surface** — how a developer and a CI job drive the tool.
-3. **Web UI routes** (P2, gated on Q-06).
+3. ~~**Web UI routes**~~ — **withdrawn** (Q-06 answered: a read-only TUI, no web UI). §3 is retained as the view inventory the TUI must cover.
 
 ---
 
@@ -138,7 +138,7 @@ The audit append sits **before** the response, not after. That ordering is the w
 | `guard log export [--format]` | Structured export | FR-22, S-14 |
 | `guard dry-run <command…>` | Run an agent session with enforcement off but logging on | FR-16, S-10 |
 | `guard allow-once <actionId> --reason <text>` | Resolve a pending `ask` | FR-25, S-15 |
-| `guard ui` | Start the local UI (P2, Q-06) | S-19 |
+| `guard audit view` | Open the **read-only TUI** audit viewer in the terminal (Q-06) | S-24 |
 
 Conventions: exit `0` allow/success, `1` operational error, `2` policy invalid, `3` denied —
 scriptable. Human output respects `NO_COLOR` and works without colour; `--json` on every read
@@ -146,11 +146,20 @@ command for machine use (Accessibility NFR).
 
 ---
 
-## 3. Web UI routes (P2, gated on Q-06)
+## 3. ~~Web UI routes~~ — withdrawn; retained as the TUI's view inventory
 
-Next.js App Router. Localhost-bound only. Auth column reads "local socket" for every row — there
-is no login, because there is no remote access and no second user; inventing a login would imply a
-security boundary that does not exist.
+> **Q-06 answered 2026-10-02:** there is no web UI and no HTTP surface
+> ([ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md),
+> [ADR-011](../05-adr/011-v1-scope-envelope.md)); the product binds no TCP port in any configuration
+> ([ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) item 4). **No route below is
+> implemented.** The table survives as the list of **views the TUI must cover** and the daemon call
+> each one needs — read the "Path" column as a view name and ignore the rendering column. The
+> `/policy` row becomes a **read-only** policy viewer; authoring stays in the config file, checked
+> with `guard policy validate` and applied with `guard policy reload` (§2).
+
+Original (web) design, for the inventory only. Localhost-bound; auth reads "local socket" for every
+row — there is no login, because there is no remote access and no second user, and inventing one
+would imply a security boundary that does not exist.
 
 | Path | Component | Rendering | Loader | Error boundary |
 |---|---|---|---|---|
@@ -196,10 +205,13 @@ security boundary that does not exist.
 
 | # | Question | Blocks |
 |---|---|---|
-| Q-04 | First target CLI | Which adapter implements §1.1 in Sprint 1 |
-| Q-06 | UI in v1? | Whether §3 is v1 work |
-| Q-02 | Platforms | Socket path convention and the install command's per-OS behaviour |
-| ADR-002 | Core language | RPC codec and code-generation approach for `shared/api` |
+Q-02, Q-04 and Q-06 were answered on 2026-10-02: §1.1 is implemented **twice** (Claude Code hook and
+MCP proxy), the socket path convention covers **macOS and Linux only**, and §3 is withdrawn
+([ADR-011](../05-adr/011-v1-scope-envelope.md)). What still blocks:
+
+| # | Question | Blocks |
+|---|---|---|
+| Q-09 / ADR-002 | Single-language Rust? | RPC codec and whether `shared/api` needs code generation at all — one language means one hand-written type set |
 
 **Related**: [`component-design.md`](component-design.md) ·
 [`state-management.md`](state-management.md) · [`testing-strategy.md`](testing-strategy.md) · ADRs

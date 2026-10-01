@@ -1,7 +1,13 @@
 # ADR-002: Rust for the enforcement core, TypeScript for the UI
 
 ## Status
-Proposed
+Proposed — **amendment pending as of 2026-10-02**
+
+Q-06 answered with a **TUI**, not a web UI ([ADR-011](011-v1-scope-envelope.md)). That removes the
+only consumer of the TypeScript half of this split. The recommendation is now a **single-language
+Rust product** with the TUI built in-process and shipped in the same binary, which also deletes the
+schema-codegen build step below. Not applied unilaterally — awaiting the product owner's
+confirmation of ADR-011's open point.
 
 ## Context
 
@@ -33,10 +39,9 @@ Split the stack at the wire contract:
 
 - **Enforcement core and the per-CLI adapters: Rust.** Distributed as a single static binary per
   platform.
-- **UI surface (audit viewer), if Q-06 puts one in v1: TypeScript.** The framework is deliberately
-  not decided here — see [ADR-010](010-supersede-adr-001-no-web-server-ui.md), which forbids a
-  server runtime or listener and defers the stack choice. What this ADR fixes is only that the UI
-  layer is **not** Rust.
+- ~~**UI surface (audit viewer), if Q-06 puts one in v1: TypeScript.**~~ **Superseded by the
+  amendment above:** Q-06 answered with a TUI, so the audit viewer is in-process and in the core's
+  language. No separate UI language, no second runtime, no generated client types.
 - **The boundary is JSON-RPC over a Unix domain socket** (ADR-003), with the JSON schemas in
   Phase 3's `api-design.md` as the single source of truth. TypeScript types for the UI are
   **generated** from those schemas, not hand-maintained in parallel.
@@ -87,12 +92,17 @@ Trade-offs accepted, stated plainly:
 
 **The team must now**
 
-1. Add a Rust workspace (`core/`, `adapters/`) alongside the Next.js app, with `cargo` wired into
-   the `lint → test → build` pipeline that Sprint 1 creates.
-2. Make schema-driven codegen a build step with a CI check that regeneration is a no-op.
-3. Set up cross-compilation for the platforms Q-02 selects.
-4. Revisit this ADR if Q-06 answers "no UI in v1" — the product is then single-language (Rust) and
-   the TypeScript half of this decision is dormant until a UI exists.
+1. Add a Rust workspace (`core/`, `adapters/`, and — if Q-09 confirms single-language — `tui/`),
+   with `cargo` wired into the `lint → test → build` pipeline that Sprint 1 creates. There is no
+   Next.js app to sit alongside: ADR-001 is superseded
+   ([ADR-010](010-supersede-adr-001-no-web-server-ui.md)).
+2. Make schema-driven codegen a build step with a CI check that regeneration is a no-op — **only if
+   Q-09 keeps TypeScript.** Single-language Rust deletes this step rather than automating it.
+3. Set up cross-compilation for **macOS and Linux** (Q-02, answered 2026-10-02). No Windows target.
+4. **Resolve Q-09.** Q-06 answered with a read-only TUI rather than a web UI, so the TypeScript half
+   of this decision has no consumer and the recommendation is a single-language Rust product with the
+   TUI in-process (`ratatui`-class) in the same binary — see
+   [ADR-011](011-v1-scope-envelope.md). Pending the owner's confirmation, not applied.
 
 ## Rejected Alternatives
 
@@ -124,8 +134,8 @@ Trade-offs accepted, stated plainly:
 **ADR Number**: 002
 **Date**: 2026-09-28
 **Author**: Claude (draft for review by Aries Ng)
-**Related**: [ADR-010](010-supersede-adr-001-no-web-server-ui.md) (governs the UI half; supersedes
-ADR-001) ·
+**Related**: [ADR-011](011-v1-scope-envelope.md) (Q-06's TUI answer makes the TS half dormant) ·
+[ADR-010](010-supersede-adr-001-no-web-server-ui.md) (governs the UI half; supersedes ADR-001) ·
 [ADR-003](003-local-daemon-over-unix-socket.md) ·
 [ADR-008](008-sandbox-confinement-primitive.md) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) ·

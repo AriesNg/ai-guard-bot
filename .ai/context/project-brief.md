@@ -12,12 +12,27 @@ actions execute inside a sandbox that confines filesystem, network, and process 
 It ships first as a guardrail for AI **CLIs** (Claude Code, Codex CLI, Gemini CLI, and others),
 with a path to extending the same policy engine to AI **desktop** applications.
 
+**v1 scope, confirmed 2026-10-02** (full reasoning in
+[`docs/05-adr/011-v1-scope-envelope.md`](../../docs/05-adr/011-v1-scope-envelope.md)):
+
+| Dimension | v1 |
+|---|---|
+| Platforms | **macOS and Linux**, both adversarially tested. **Windows unsupported**, and no Windows boundary claim published |
+| Threat model | **An agent that errs**, not one actively escaping. Injection-driven escape is detected and logged, not claimed to be prevented |
+| Integrations at ship | **Two**: Claude Code via its hook interface, and the vendor-neutral **MCP proxy** |
+| Distribution | **Single-user local tool** — no control plane, no centrally-managed baseline |
+| Interface | **CLI + config file + a read-only TUI audit viewer.** No web UI, and no process that binds a TCP port |
+| Day-one posture | **Enforcing immediately.** Dry-run is opt-in, not an onboarding phase |
+| Timeline | **Side project, intermittent** — each sprint must land something independently useful |
+
 ## Who
 
 - **Individual developers** running AI coding agents on machines that hold real credentials,
   customer data, or production access.
 - **Engineering teams and platform/DevEx groups** that want a single, reviewable policy file
-  governing AI agent behaviour across every tool their engineers choose.
+  governing AI agent behaviour across every tool their engineers choose. *(Not a v1 audience: v1 is
+  a single-user local tool. The policy format, the adapter contract, and the precedence resolver are
+  designed not to foreclose this, but nothing is distributed in v1.)*
 - **Security, compliance, and risk functions** that need an enforcement point and an audit
   trail for AI agent activity, without banning the tools outright.
 
@@ -84,8 +99,8 @@ leave the machine unmasked, and (c) everything the agent did is recorded.
    intent-level rules in plain language; the engine — deterministic matchers plus the local
    model — resolves them against concrete actions. A declarative rule file (allow/deny/ask/mask
    matching tool name, command, path, network destination, content) and user-supplied hooks
-   remain available for cases needing exactness. Rules are versionable, shareable across a
-   team, and portable across every supported CLI.
+   remain available for cases needing exactness. Rules are versionable and portable across every
+   supported CLI; *sharing them across a team is post-v1.*
 4. **Structured violation responses.** On denial, return a stable error code plus the list of
    violated rules, in a form the calling agent can parse and act on rather than a free-text
    refusal.
@@ -114,15 +129,26 @@ targets for discussion:
 - **Privacy**: no action content, file content, or prompt leaves the local machine as part of a
   policy decision.
 - **Observability**: every decision emits a structured event with rule id, decision, and latency.
-- **Accessibility**: any UI surface meets WCAG 2.1 AA.
+- **Accessibility**: WCAG 2.1 AA, applied to v1's actual surfaces — the **terminal and the TUI**:
+  no information carried by colour alone, keyboard-operable end to end, and every TUI query
+  answerable as linear text through `guard audit query` for screen-reader users.
 
 ## Stack Preferences
 
-- **Binding**: ADR-001 (Accepted) — Next.js 14+ App Router, TypeScript, React Server Components
-  by default. This governs any web/UI surface (policy editor, audit log viewer, dashboard).
-- The **enforcement core** (interceptor, policy engine, sandbox) has different constraints —
-  startup time, latency, OS-level sandboxing — and its language and runtime are an **open
-  question for Phase 3**, to be settled by a new ADR rather than assumed from ADR-001.
+- **No UI framework is binding.** ADR-001 (Next.js / React Server Components) was inherited from
+  the project scaffold, predates this brief, and is **superseded by
+  [ADR-010](../../docs/05-adr/010-supersede-adr-001-no-web-server-ui.md)**: it binds nothing. Four of
+  its five stated reasons do not apply to a local daemon, and a Next.js server would bind a TCP port,
+  which [ADR-003](../../docs/05-adr/003-local-daemon-over-unix-socket.md) forbids outright.
+- **The UI is a read-only TUI audit viewer**, in-process, shipped inside the same binary. No server
+  runtime, no listening port, no write path to policy — policy writes go through the CLI so the write
+  path has one entry point.
+- The **enforcement core** (interceptor, policy engine, sandbox) is proposed as **Rust** in
+  [ADR-002](../../docs/05-adr/002-enforcement-core-language.md), for startup time, latency, and
+  direct access to the OS sandboxing primitives. *Amendment pending:* with a TUI rather than a web
+  UI, nothing consumes the TypeScript half of that ADR, so the recommendation is a **single-language
+  Rust** product — one static binary, no Node runtime inside a security tool. **Needs your
+  confirmation** (Q-09 below).
 - **Local model runtime**: a pluggable local inference layer (Ollama or equivalent) rather than
   a hard dependency on one model.
 - **Avoid**: any hard dependency on a specific AI vendor's SDK in the enforcement path, and any
@@ -130,22 +156,46 @@ targets for discussion:
 
 ## Timeline
 
-Not yet set.
+**Side project, worked on intermittently.** No fixed date. Two consequences are treated as binding
+rather than advisory: each sprint must land something independently useful, and the design must be
+documented thoroughly up front, because the context will not survive multi-week gaps.
 
 ## Open Questions for the Human
 
-These block or materially shape Phase 1 and should be answered before Discovery is approved:
+### Still open — these block Discovery approval
 
-1. **Local model choice.** The request named "jev / laya" — these were read as small local models
-   in the Llama/Gemma/Qwen class. Please confirm the intended models or runtimes.
-2. **Target platforms.** macOS only to start, or macOS + Linux + Windows? This drives the sandbox
-   technology choice heavily.
-3. **"100% safe sandbox."** No sandbox is absolutely safe. What is the threat model — an agent
-   that errs, or an agent actively trying to escape (e.g. driven by prompt injection)? The
-   answer changes the design substantially.
-4. **First target agent.** Which AI CLI should be supported end-to-end first?
-5. **Distribution.** Single-user local tool, or team deployment with centrally-managed policy?
-6. **Scope of the UI.** Is a web UI in scope for v1, or is v1 CLI-and-config-file only?
+1. **Local model choice (Q-01).** "laya" is a specific model you have in mind, not a Llama-class
+   placeholder. Which model, and which runtime serves it? This gates
+   [ADR-005](../../docs/05-adr/005-pluggable-local-model-runtime.md): the accuracy thresholds, the
+   memory budget against the 16 GB laptop floor, and whether constrained decoding is available are
+   all properties of a named model, not of "a small local model".
+2. **Single-language Rust (Q-09).** Raised *by* the answers below rather than carried from this
+   brief. Choosing a TUI removed the only consumer of TypeScript, so the recommendation is to build
+   the TUI in-process in Rust and ship one binary, deleting the schema-codegen step ADR-002
+   introduced to keep two languages in sync. This is an amendment to ADR-002 and has not been
+   applied unilaterally.
+
+### Answered 2026-10-02
+
+| # | Question | Your answer |
+|---|---|---|
+| 2 | Target platforms | **macOS + Linux, both properly tested; Windows untested and therefore declared unsupported.** Your condition was "all three *if* we can test all three" — it fails for Windows, so no Windows claim is published |
+| 3 | Threat model | **An agent that errs.** Injection-driven escape is detected and logged; prevention is explicitly not claimed |
+| 4 | First target agent | **Two at ship**, not one: a hook-based adapter (Claude Code) and the MCP proxy. Your instinct was that the product must be CLI-agnostic — two differently-shaped integrations are what make that claim demonstrated rather than asserted |
+| 5 | Distribution | **Single-user local tool.** Team deployment, shared baselines, and the team denial view move post-v1 |
+| 6 | Scope of the UI | **CLI + config file, plus a read-only TUI audit viewer.** No web UI |
+| — | Day-one posture | **Enforcing immediately.** You declined the dry-run-first-session recommendation; in exchange the shipped default policy and the accuracy gate become release blockers, since a false deny now lands before the product has earned any credit |
+| — | Timeline | **Side project, intermittent** |
+
+Each answer and its consequences are recorded in
+[`docs/05-adr/011-v1-scope-envelope.md`](../../docs/05-adr/011-v1-scope-envelope.md); the Discovery
+document was re-scoped to match on the same date.
 
 ---
 **Instructions**: After filling this in, share this file with the AI and ask it to begin Phase 1 (Discovery).
+
+**Edit note (2026-10-02):** this file is human-owned per `.ai/workflow.md`. The scope table, the
+Stack Preferences rewrite, the timeline, and the Open Questions section above were written by Claude
+**at the product owner's explicit request** ("make sure we document these details and update both
+.ai and docs folders' files"), recording the owner's own answers from the confirmation session of
+that date. Nothing here is Claude's own decision; the two questions left open are left open.

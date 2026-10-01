@@ -3,6 +3,12 @@
 ## Status
 Proposed — **supersedes [ADR-001](001-use-react-and-typescript.md)**
 
+**Amended 2026-10-02:** Q-06 is answered — v1's interface is the **CLI, the config file, and a
+read-only TUI audit viewer**. No web UI, no browser, no asset-serving path. Item 2 below ("no UI
+stack is chosen now") therefore **closes**: the stack is a terminal UI. See
+[ADR-011](011-v1-scope-envelope.md). Item 4's TypeScript preference is consequently moot, and
+ADR-002's TypeScript half is dormant — ADR-011 raises making the product single-language Rust.
+
 ## Context
 
 ADR-001 (Accepted, 2026-05-10) fixed Next.js 14+ App Router, TypeScript, and React Server
@@ -43,8 +49,9 @@ the product outright if the audit log is reachable by the thing being audited.
 
 1. **ADR-001 is superseded and binds nothing.** No framework, router, or rendering strategy is
    decided for this project by inheritance from the scaffold.
-2. **No UI stack is chosen now.** The choice waits on Q-06 being answered, and will be made in its
-   own ADR against this product's actual forces. A scaffold default is not a decision.
+2. ~~**No UI stack is chosen now.** The choice waits on Q-06 being answered.~~ **Closed 2026-10-02:**
+   the UI is a **read-only TUI audit viewer**, in-process, shipped inside the same binary. A terminal
+   UI satisfies items 3a–3c below by construction — there is nothing to serve and no port to bind.
 3. **Any future UI must satisfy these constraints, which are decided now** and are what ADR-001
    should have been reasoning about:
    - **No server runtime ships as part of the product.** The UI is statically built assets.
@@ -55,19 +62,19 @@ the product outright if the audit log is reachable by the thing being audited.
      has one entry point.
    - **It is outside the enforcement path.** No decision ever waits on the UI, and the UI being
      absent, broken, or closed changes no decision.
-4. **TypeScript survives as the language for any UI client code**, and React remains the
-   recommended rendering library. This is the one part of ADR-001 worth keeping, and it is kept as
-   a *preference* rather than a binding constraint, because it was never the contested question.
+4. ~~**TypeScript survives as the language for any UI client code**, and React remains the
+   recommended rendering library.~~ **Moot as of 2026-10-02:** with a TUI rather than a web UI, no
+   browser-facing code exists, so nothing of ADR-001's stack survives in practice. The TUI's
+   language follows the enforcement core's — see [ADR-011](011-v1-scope-envelope.md).
 5. **The WCAG 2.1 AA requirement is not superseded.** It attaches to whatever interface exists,
    and in a CLI-only v1 that means the terminal surface: no information conveyed by colour alone,
    denial reasons legible without ANSI styling, and output that reads correctly through a screen
    reader.
 
-**Recommendation on Q-06, for the human to confirm:** answer *CLI and config file only for v1*.
-Every v1 requirement — authoring rules (S-01), seeing a denial (S-04), querying the log (S-19),
-verifying the chain (S-22) — is reachable from a terminal, and the audit log viewer is the only
-surface that genuinely benefits from a GUI. Deferring it keeps the trust surface to one process
-and removes the whole class of problem described above.
+**Q-06 outcome (2026-10-02):** CLI and config file, **plus a read-only TUI audit viewer**. This is
+the recommendation's reasoning taken one step further: the audit log was identified above as the one
+surface that genuinely benefits from a richer view, and a TUI delivers that without a port, a second
+process, or a frontend stack. The trust surface stays at one process.
 
 ## Rationale
 
@@ -116,18 +123,22 @@ Trade-offs accepted:
 
 **The team must now**
 
-1. **Answer Q-06.** This ADR is approvable without it, but item 2 cannot close until it is answered.
+1. ~~**Answer Q-06.**~~ **Done 2026-10-02:** a read-only TUI. Item 2 above is closed.
 2. Update every citation of ADR-001 so nothing still describes it as binding — `README.md`,
    `docs/01-discovery/requirements.md` (Constraints, Q-06), `docs/04-solution-design/component-design.md`
    (A-6, §3), `docs/04-solution-design/state-management.md` (§B), `docs/05-adr/README.md`, and
    `CLAUDE.md`. Done in the same change as this ADR.
-3. **Ask the human to amend `.ai/context/project-brief.md` → Stack Preferences**, which still reads
-   "**Binding**: ADR-001 (Accepted)". That file is human-owned per `.ai/workflow.md` and is not
-   edited here.
-4. Rework `component-design.md` §3's Server-Action-based policy editor into the CLI write path, or
-   mark it as contingent on a UI ADR that permits a server runtime.
-5. Add the WCAG 2.1 AA checks for the CLI surface to `../04-solution-design/testing-strategy.md`,
-   which currently scopes accessibility testing to a web UI.
+3. ~~**Ask the human to amend `.ai/context/project-brief.md` → Stack Preferences**, which still reads
+   "**Binding**: ADR-001 (Accepted)".~~ **Done 2026-10-02**, at the product owner's explicit request:
+   Stack Preferences now records that no UI framework is binding, that the UI is a read-only TUI, and
+   that Q-09 (single-language Rust) is open. That file is human-owned per `.ai/workflow.md`, so the
+   edit is marked as owner-requested at the foot of the file.
+4. ~~Rework `component-design.md` §3's Server-Action-based policy editor into the CLI write path~~
+   **Done:** §3 is withdrawn as a build target and retained only as the TUI's view inventory;
+   `state-management.md` Part B is re-based on the TUI with the policy-write flows moved to the CLI.
+5. ~~Add the WCAG 2.1 AA checks for the CLI surface to `../04-solution-design/testing-strategy.md`~~
+   **Done:** §1a of that document now specifies the terminal/TUI accessibility checks, including the
+   `guard audit query` equivalent path for screen-reader users, as a blocking CI stage.
 
 ## Rejected Alternatives
 
@@ -150,7 +161,7 @@ Trade-offs accepted:
   narrowest possible repair, and it would satisfy ADR-003. Rejected as still deciding a stack for a
   component whose existence is undecided — and a Next.js whose server, API routes, RSC, and Server
   Actions are all forbidden is being used for its bundler alone, which is not a reason to adopt a
-  framework. Remains the obvious candidate if Q-06 answers yes.
+  framework. Moot as of 2026-10-02: Q-06 answered with a TUI, so no web stack is adopted at all.
 - **Ship a terminal UI (TUI) as the audit viewer** instead of deferring. Attractive: no port, no
   second process, no browser, and it is where the developer already is. Rejected *as part of this
   ADR* because it is a UI stack decision, and item 2 says those wait for Q-06 — but it is the

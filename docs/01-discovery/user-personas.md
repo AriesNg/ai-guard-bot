@@ -48,6 +48,13 @@ times a day, or blocks something reasonable and leaves her editing rules mid-tas
 
 ## P2 — Miguel, the platform / DevEx engineer
 
+> **Not a v1 persona** (confirmed 2026-10-02). Q-05 scoped v1 to a **single-user local tool**, and
+> every one of Miguel's needs — a distributed baseline, uniform rollout, an aggregate denial view —
+> requires distribution machinery that v1 does not build. The stories written for him (S-11, S-12,
+> S-23) are deferred post-v1. He is retained here unchanged because he is the reason the policy
+> format, the `CliAdapter` contract, and the precedence resolver are designed to generalise: v1 must
+> not foreclose him. See [`../05-adr/011-v1-scope-envelope.md`](../05-adr/011-v1-scope-envelope.md).
+
 *Buyer and rollout owner. Decides whether the product exists at 120 engineers rather than one.*
 
 | | |
@@ -159,15 +166,19 @@ error code with no explanation.
 
 ## Persona-to-priority check
 
-| Story band | Dana | Miguel | Priya | Tom |
+| Story band | Dana | Miguel *(post-v1)* | Priya | Tom |
 |---|---|---|---|---|
-| P0 (S-01 … S-10) | ✅ all | precondition | S-05/06 essential | S-04/05 essential |
-| P1 (S-11 … S-18) | S-15, S-17 | ✅ core | ✅ core | S-13 |
-| P2 (S-19 … S-23) | S-19 | S-23 | S-21 | S-21 |
+| P0 (S-01 … S-10, S-24) | ✅ all | precondition | S-05/06, S-24 essential | S-04/05 essential |
+| P1 (S-13 … S-18) | S-15, S-17 | ✅ core, but deferred | ✅ core | S-13 |
+| P2 (S-20 … S-22) | S-20 | — | S-21 | S-21 |
+| Post-v1 (S-11, S-12, S-23) | — | ✅ his whole set | S-12 | — |
 
 The P0 band is Dana's set, which is correct: without a single developer keeping it installed,
-none of the other three personas' needs can be met. Miguel and Priya's requirements concentrate
-in P1 — deliberate, since a team-wide sell before a single-user product works would be premature.
+none of the other three personas' needs can be met. Miguel's requirements concentrate in the
+post-v1 band — deliberate, and confirmed as the scope decision on 2026-10-02: a team-wide sell
+before a single-user product works would be premature. Priya is served within v1, because the
+append-only audit log and the read-only TUI (S-24) answer her evidence question on one machine
+without any distribution.
 Tom's needs are met mostly by *defaults* rather than features, which is why the default policy is
 tracked as a first-class deliverable under risk R-06 rather than as a nice-to-have.
 

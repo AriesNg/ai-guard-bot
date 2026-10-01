@@ -33,8 +33,10 @@ extending the same policy engine to AI **desktop** applications.
 
 | Layer | Technology | Basis |
 |-------|-----------|-------|
-| UI surface (audit log viewer), *if any* | **Undecided — and gated on Q-06.** Any UI must be static assets: no server runtime, no listener, read-only against the daemon. TypeScript preferred for client code. | [ADR-010](docs/05-adr/010-supersede-adr-001-no-web-server-ui.md) — **Proposed**, supersedes ADR-001 |
-| Enforcement core (interceptor, policy engine, sandbox) | **Rust proposed** — process-start cost against a P95 < 10 ms budget, and first-class bindings to OS confinement primitives | [ADR-002](docs/05-adr/002-enforcement-core-language.md) — **Proposed** |
+| UI surface (audit log viewer) | **A read-only TUI**, in-process, inside the same binary (Q-06, 2026-10-02). No web UI, no server runtime, no listener; policy writes go through the CLI. | [ADR-010](docs/05-adr/010-supersede-adr-001-no-web-server-ui.md) — **Proposed**, supersedes ADR-001 · [ADR-011](docs/05-adr/011-v1-scope-envelope.md) |
+| Enforcement core (interceptor, policy engine, sandbox) | **Rust proposed** — process-start cost against a P95 < 10 ms budget, and first-class bindings to OS confinement primitives. **Amendment pending**: with a TUI rather than a web UI, the recommendation is single-language Rust — one binary, no Node runtime (Q-09) | [ADR-002](docs/05-adr/002-enforcement-core-language.md) — **Proposed, amendment pending** |
+| Platforms | **macOS and Linux** — Seatbelt, and Landlock + seccomp + network namespaces. **Windows unsupported in v1**, no boundary claim published | [ADR-008](docs/05-adr/008-sandbox-confinement-primitive.md) · [ADR-011](docs/05-adr/011-v1-scope-envelope.md) |
+| Host integrations at ship | **Two**: Claude Code hook adapter and the vendor-neutral MCP proxy | [ADR-007](docs/05-adr/007-cli-integration-strategy.md) |
 | Local model runtime | Pluggable local inference layer (Ollama or equivalent), not a hard dependency on one model | `.ai/context/project-brief.md` |
 | Infrastructure | Not yet decided (Phase 6) | — |
 
@@ -55,7 +57,8 @@ To be quantified in Phase 1 and fixed in Phase 3. Current targets for discussion
 - **Privacy** — no action content, file content, or prompt leaves the local machine as part of a
   policy decision.
 - **Observability** — every decision emits a structured event with rule id, decision, and latency.
-- **Accessibility** — any UI surface meets WCAG 2.1 AA.
+- **Accessibility** — WCAG 2.1 AA on v1's real surfaces, the terminal and the TUI: no colour-only
+  meaning, keyboard-operable throughout, and every TUI query answerable as linear text.
 - **Sandbox isolation** — stated as a concrete threat model, never as an absolute claim.
 
 ## Getting Started
@@ -91,27 +94,26 @@ Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before contr
 
 | # | Phase | Folder | Prerequisite | Status |
 |---|-------|--------|--------------|--------|
-| 1 | Discovery — requirements, personas, user stories | [`docs/01-discovery/`](docs/01-discovery/) | — | 🟡 Draft — awaiting review |
+| 1 | Discovery — requirements, personas, user stories | [`docs/01-discovery/`](docs/01-discovery/) | — | 🟡 Draft — v1 scope confirmed 2026-10-02; blocked only on Q-01 and Q-09 |
 | 2 | UX Design — flows, wireframes, design system | [`docs/02-ux-design/`](docs/02-ux-design/) | Discovery approved | ⬜ Not started |
 | 3 | System Design — architecture, data model, APIs | [`docs/03-system-design/`](docs/03-system-design/) | UX Design approved | ⬜ Not started |
 | 4 | Solution Design — components, state, testing strategy | [`docs/04-solution-design/`](docs/04-solution-design/) | System Design approved | 🟡 Draft — written ahead of its prerequisite on request; the assumed architecture in `component-design.md` §0 awaits Phase 3 |
-| 5 | ADRs — architecture decisions with rationale | [`docs/05-adr/`](docs/05-adr/) | — | 🟡 Draft (002–010 Proposed; ADR-001 superseded by 010) |
+| 5 | ADRs — architecture decisions with rationale | [`docs/05-adr/`](docs/05-adr/) | — | 🟡 Draft (002–011 Proposed; ADR-001 superseded by 010; ADR-002 amendment pending) |
 | 6 | Infrastructure — deployment, CI/CD, monitoring | [`docs/06-infrastructure/`](docs/06-infrastructure/) | System Design approved (may overlap with Solution Design) | ⬜ Not started |
 | 7 | Implementation — sprint plans and progress | [`docs/07-implementation/`](docs/07-implementation/) | Phases 1–6 approved, at least for Sprint 1's scope | ⬜ Not started |
 
 ## Open Questions
 
-These block or materially shape Phase 1 and should be answered before Discovery is approved
-(full text in `.ai/context/project-brief.md`):
+**Six of the original questions were answered by the product owner on 2026-10-02** and are recorded
+in [ADR-011](docs/05-adr/011-v1-scope-envelope.md) — see the v1 scope table in
+`.ai/context/project-brief.md`. Two remain, and they are what still blocks Discovery approval:
 
-1. **Local model choice** — the request named "jev / laya"; read as small local models in the
-   Llama/Gemma/Qwen class. Confirm the intended models or runtimes.
-2. **Target platforms** — macOS only to start, or macOS + Linux + Windows? Drives the sandbox
-   technology choice heavily.
-3. **Threat model** — an agent that errs, or an agent actively trying to escape (e.g. driven by
-   prompt injection)? The answer changes the design substantially.
-4. **First target agent** — which AI CLI should be supported end-to-end first?
-5. **Distribution** — single-user local tool, or team deployment with centrally-managed policy?
-6. **Scope of the UI** — is a web UI in scope for v1, or is v1 CLI-and-config-file only?
+1. **Local model choice (Q-01)** — "laya" is a specific model, not a Llama-class placeholder. Which
+   model, and which runtime serves it? The accuracy thresholds, the memory budget against the 16 GB
+   laptop floor, and whether constrained decoding is available are all properties of a named model.
+   Gates [ADR-005](docs/05-adr/005-pluggable-local-model-runtime.md).
+2. **Single-language Rust (Q-09)** — the TUI answer removed the only consumer of TypeScript.
+   Recommendation: build the TUI in-process in Rust, ship one binary, delete the schema-codegen step.
+   An amendment to [ADR-002](docs/05-adr/002-enforcement-core-language.md), not applied unilaterally.
 
-Timeline: not yet set.
+Timeline: **side project, intermittent.** Each sprint must land something independently useful.

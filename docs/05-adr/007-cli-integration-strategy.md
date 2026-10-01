@@ -25,7 +25,9 @@ Fixed constraints:
 - FR-10: where coverage cannot be guaranteed for an action class, **deny**, and report the gap at
   startup rather than silently.
 - Adapter process start sits inside a P95 < 10 ms overhead budget (ADR-002).
-- Q-04 (which CLI is supported end-to-end first) is still open.
+- Q-04 is **answered** ([ADR-011](011-v1-scope-envelope.md)): v1 ships **two** adapters — a
+  hook-based one for Claude Code and the vendor-neutral MCP proxy. Two different integration shapes,
+  deliberately, so the contract is validated rather than shaped by a single host.
 
 ## Decision
 
@@ -99,9 +101,12 @@ Trade-offs accepted:
 
 **The team must now**
 
-1. Answer **Q-04**, which fixes the Sprint-1 adapter.
-2. Write the `CliAdapter` contract before the first adapter, so the first integration does not
-   become the de facto contract.
+1. Write the `CliAdapter` contract before either adapter, so the first integration does not become
+   the de facto contract — and build the Claude Code adapter and the MCP proxy against it in
+   parallel rather than in sequence, since their difference is what proves the contract general
+   ([ADR-011](011-v1-scope-envelope.md)).
+2. Confirm Claude Code's hook surface covers every `ActionKind` it can perform, and publish the
+   coverage matrix for both adapters before advertising support for either.
 3. Build the red-team interception-bypass suite (`../04-solution-design/testing-strategy.md` §2.2)
    against the real host: relative and symlinked paths, shell chaining and command substitution, a
    shell spawned to run a blocked command, an interpreter one-liner performing a blocked write.
@@ -143,7 +148,8 @@ Trade-offs accepted:
 **ADR Number**: 007
 **Date**: 2026-09-28
 **Author**: Claude (draft for review by Aries Ng)
-**Related**: [ADR-003](003-local-daemon-over-unix-socket.md) ·
+**Related**: [ADR-011](011-v1-scope-envelope.md) (answers Q-04: two adapters at ship) ·
+[ADR-003](003-local-daemon-over-unix-socket.md) ·
 [ADR-008](008-sandbox-confinement-primitive.md) · [ADR-009](009-fail-closed-default.md) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-07–FR-10, R-04, R-05 ·
 [`../04-solution-design/component-design.md`](../04-solution-design/component-design.md) §2.8

@@ -1,6 +1,8 @@
 # 05 — Architecture Decision Records
 
-**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-010 Proposed, awaiting human review
+**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-011 Proposed, awaiting human review
+**Last updated**: 2026-10-02, after the product owner's requirements-confirmation session (recorded
+in [ADR-011](011-v1-scope-envelope.md))
 
 ## Purpose
 Record every significant architectural decision with context, rationale, and rejected alternatives.
@@ -10,15 +12,16 @@ Record every significant architectural decision with context, rationale, and rej
 | # | Title | Status | Date |
 |---|-------|--------|------|
 | [001](001-use-react-and-typescript.md) | Use React + TypeScript with Next.js App Router | ~~Accepted~~ **Superseded by 010** | 2026-05-10 |
-| [002](002-enforcement-core-language.md) | Rust for the enforcement core, TypeScript for the UI | Proposed | 2026-09-28 |
+| [002](002-enforcement-core-language.md) | Rust for the enforcement core, TypeScript for the UI | Proposed — **amendment pending** (TUI makes it single-language) | 2026-09-28 |
 | [003](003-local-daemon-over-unix-socket.md) | A long-lived local daemon addressed over a Unix domain socket | Proposed | 2026-09-28 |
 | [004](004-layered-policy-model.md) | Layered policy — deterministic rules decide first, intent rules fill the gap | Proposed | 2026-09-28 |
 | [005](005-pluggable-local-model-runtime.md) | Pluggable local model runtime with constrained decoding | Proposed | 2026-09-28 |
 | [006](006-audit-log-integrity.md) | Hash-chained, single-writer audit log, durable before the decision returns | Proposed | 2026-09-28 |
 | [007](007-cli-integration-strategy.md) | Per-CLI adapters over documented hook interfaces, with a coverage matrix | Proposed | 2026-09-28 |
-| [008](008-sandbox-confinement-primitive.md) | Sandbox confinement — OS-native primitives, and no absolute isolation claim | Proposed — primitive **blocked on Q-02, Q-03** | 2026-09-28 |
+| [008](008-sandbox-confinement-primitive.md) | Sandbox confinement — OS-native primitives, and no absolute isolation claim | Proposed — **unblocked**; Seatbelt + Landlock/seccomp | 2026-09-28 |
 | [009](009-fail-closed-default.md) | Fail-closed by default, implemented as a default value rather than a branch | Proposed | 2026-09-28 |
-| [010](010-supersede-adr-001-no-web-server-ui.md) | Supersede ADR-001 — no web-server UI; the CLI is v1's interface | Proposed | 2026-10-02 |
+| [010](010-supersede-adr-001-no-web-server-ui.md) | Supersede ADR-001 — no web-server UI; the CLI is v1's interface | Proposed — amended, Q-06 closed with a TUI | 2026-10-02 |
+| [011](011-v1-scope-envelope.md) | v1 scope envelope — platforms, adapters, interface, posture | Proposed | 2026-10-02 |
 
 ## Scope note on ADR-001 — superseded
 
@@ -52,6 +55,10 @@ flowchart TD
     A002 --> A008[ADR-008: Sandbox primitive]
     A007 --> A008
     A008 --> A009
+    A011["ADR-011: v1 scope envelope<br/>(Q-02…Q-08 answered)"] --> A008
+    A011 --> A007
+    A011 --> A010
+    A011 -.->|amendment pending| A002
 ```
 
 ## What each ADR answers
@@ -67,16 +74,21 @@ flowchart TD
 | 008 | What is the confinement boundary, and what will the product claim about it? | FR-17, FR-18, R-02 |
 | 009 | What happens to an action when the engine cannot evaluate it? | S-08, FR-10, Availability NFR |
 | 010 | Does the product ship a UI, and may it ship a web server to do it? | ADR-003's no-listener invariant; R-07; persona P3; Q-06 |
+| 011 | What is actually in v1 — which platforms, which adapters, which interface, enforcing from when? | The product owner's answers of 2026-10-02 |
 
 ## Blocked on human input
 
+As of 2026-10-02, **two questions remain open** — Q-01, carried from the brief, and **Q-09**, raised
+*by* the answers. See [ADR-011](011-v1-scope-envelope.md) for the seven that were answered.
+
 | ADR | Blocked on | Effect |
 |---|---|---|
-| 008 | **Q-02** (platforms), **Q-03** (erring vs actively-escaping agent) | The primitive per platform cannot be fixed; the ADR's *claims* half is decidable and decided |
-| 005 | **Q-01** (model/runtime: "laya" read as Llama-class) | Approvable as written; accuracy and memory numbers unverifiable until a concrete pairing is named |
-| 007 | **Q-04** (first target CLI) | Fixes which adapter Sprint 1 builds |
-| 002 | **Q-06** (UI in v1?) | If no UI in v1, the product is single-language and no UI stack is needed |
-| 010 | **Q-06** (UI in v1?) | Items 1, 3–5 are decidable now and decided; item 2 (the stack choice) cannot close until Q-06 is answered |
+| 005 | **Q-01** — which model is "laya"? The owner confirms it is a specific model, not a Llama-class placeholder | The runtime port and the `LocalModelRuntime` contract stand; the accuracy gate thresholds and the < 5 GB memory budget cannot be validated until the model is named |
+| 002 | **Q-09** — owner's confirmation of [ADR-011](011-v1-scope-envelope.md)'s open point: make the product single-language Rust, now that the UI is a TUI | Decides whether TypeScript, a Node runtime, and the schema-codegen build step exist at all |
+
+Resolved: Q-02 and Q-03 (ADR-008, unblocked — Seatbelt on macOS, Landlock + seccomp + netns on
+Linux, Windows unsupported), Q-04 (ADR-007 — Claude Code adapter plus the MCP proxy), Q-05, Q-06
+(ADR-010 — TUI), Q-07, Q-08.
 
 ## Template
 See `.ai/templates/adr.md`. Every ADR records **Rejected Alternatives**, not just the decision.

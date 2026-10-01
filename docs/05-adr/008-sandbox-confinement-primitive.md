@@ -1,13 +1,20 @@
 # ADR-008: Sandbox confinement — OS-native primitives, and no absolute isolation claim
 
 ## Status
-Proposed — **the primitive choice is blocked on Q-02 (platforms) and Q-03 (threat model)**
+Proposed — **unblocked 2026-10-02**; Q-02 and Q-03 are answered by
+[ADR-011](011-v1-scope-envelope.md)
 
-This ADR decides the parts that are decidable now: what the product will and will not claim, and
-how the boundary is represented. The specific primitive is recorded as a conditional
-recommendation, to be fixed by an amendment once Q-02 and Q-03 are answered. It is filed rather
-than deferred because the *claims* half is what the rest of the design depends on, and because
-`../04-solution-design/component-design.md` §2.5 needs a decision to point at.
+The primitive is now fixed rather than conditional:
+
+| Platform | Primitive | v1 status |
+|---|---|---|
+| **macOS** | Seatbelt / `sandbox_init` profile per executed action | Supported, tested |
+| **Linux** | Landlock (filesystem) + seccomp-bpf (syscalls) + network namespace | Supported, tested |
+| **Windows** | AppContainer would be the candidate | **Not supported, no boundary claim published** — it cannot be tested (ADR-011), and item 3 below deletes untested claims |
+
+This follows from Q-03 answering **erring agent**: confinement by allowlist is sufficient, and the
+heavier container/microVM boundaries stay rejected. Prompt-injection-driven escape is **not** claimed
+to be prevented, and the threat model must say so.
 
 ## Context
 
@@ -62,21 +69,20 @@ Decided now, independent of Q-02/Q-03:
 8. **Confinement is derived from the policy**, not configured separately, so there is one place a
    developer expresses intent.
 
-Conditional recommendation for the primitive, pending Q-02/Q-03:
+Decided per platform (Q-02 and Q-03 answered — [ADR-011](011-v1-scope-envelope.md)):
 
-| Platform | Erring-agent threat model | Actively-escaping threat model |
-|---|---|---|
-| **macOS** | Seatbelt / `sandbox_init` profile per executed action | Seatbelt plus a per-session container boundary; treat Seatbelt alone as insufficient against a determined escape |
-| **Linux** | Landlock for filesystem + seccomp for syscalls + network namespace | Landlock + seccomp-bpf + user/network namespaces, or a microVM if Q-03 says the adversary is deliberate |
-| **Windows** | Out of scope unless Q-02 says otherwise; AppContainer would be the candidate | Out of scope for v1 |
+9. **macOS: a Seatbelt (`sandbox_init`) profile per executed action.**
+10. **Linux: Landlock for filesystem scoping, seccomp-bpf for syscall restriction, and a network
+    namespace for the network allowlist.**
+11. **Windows: not supported in v1, and no Windows boundary claim is published** — it cannot be
+    tested, and item 3 deletes untested claims. AppContainer is the candidate when it returns.
+12. **Prompt-injection-driven escape is in scope for detection and logging, and explicitly not
+    claimed to be prevented.** The published threat model must state this limitation in those terms.
 
-**Recommendation**: answer Q-03 as *erring agent, with prompt-injection-driven escape treated as
-in-scope for detection but not fully prevented in v1*, and ship OS-native per-action confinement
-(Seatbelt / Landlock+seccomp) with that limitation stated explicitly in the threat model. This is
-honest, achievable in v1, and materially better than the status quo of unconstrained execution. A
-microVM boundary is the right answer to a deliberate-adversary threat model but is a different
-product in cost, start-up latency, and developer friction, and would put the < 2 s cold start and
-the "developers can still work" requirement at risk.
+The heavier boundaries stay rejected on the erring-agent threat model: a microVM is the right answer
+to a deliberate adversary, but it is a different product in cost, start-up latency, and developer
+friction, and would put the < 2 s cold start and the "developers can still work" requirement at
+risk.
 
 ## Rationale
 
@@ -120,10 +126,10 @@ Trade-offs accepted:
 
 **The team must now**
 
-1. **Answer Q-02 and Q-03.** This ADR cannot be moved to Accepted in full without them, and
-   `../04-solution-design/component-design.md` §2.5 stays provisional until then.
-2. Amend this ADR with the chosen primitive per platform, then write the `BoundaryDescription` for
-   each.
+1. Write the `BoundaryDescription` for macOS and for Linux, each enumerating what is confined and
+   what is not — the primitives are now fixed, so this is buildable.
+2. State the prompt-injection limitation (item 12) verbatim in the published threat model, rather
+   than leaving it implied by the absence of a claim.
 3. Write the boundary-claims adversarial suite and wire it into CI per platform.
 4. Draft the published threat model from `BoundaryDescription`, and have Phase 3's `security.md`
    own it.
@@ -143,7 +149,7 @@ Trade-offs accepted:
   it recreates most of the exposure while adding large friction. Remains the recommended shape for
   a deliberate-adversary threat model if Q-03 answers that way.
 - **A microVM per session.** The strongest boundary available locally and the correct answer to an
-  actively-escaping agent. Rejected for v1: start-up cost against a < 2 s cold start, memory against
+  actively-escaping agent — which Q-03 confirms is not v1's threat model. Rejected for v1: start-up cost against a < 2 s cold start, memory against
   a < 5 GB budget already mostly spent on the model, and file-sharing friction that would make
   normal development painful. This is a different product, and possibly a later one.
 - **No sandbox at all — rely solely on pre-execution policy decisions.** Defensible, since the
@@ -160,7 +166,8 @@ Trade-offs accepted:
 **ADR Number**: 008
 **Date**: 2026-09-28
 **Author**: Claude (draft for review by Aries Ng)
-**Related**: [ADR-002](002-enforcement-core-language.md) ·
+**Related**: [ADR-011](011-v1-scope-envelope.md) (answers Q-02 and Q-03) ·
+[ADR-002](002-enforcement-core-language.md) ·
 [ADR-007](007-cli-integration-strategy.md) · [ADR-009](009-fail-closed-default.md) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-17, FR-18, R-02, R-07,
 Q-02, Q-03 ·

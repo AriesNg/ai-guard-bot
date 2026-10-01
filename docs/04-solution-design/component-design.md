@@ -29,7 +29,7 @@ each traceable to a Discovery requirement:
 | A-3 | Transport is **JSON-RPC over a Unix domain socket** with filesystem permissions, not a TCP port. | [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) | Security NFR (agent must not reach the engine), Privacy NFR | Transport swap only; `DecisionService` contract unchanged. |
 | A-4 | Evaluation is a **pipeline of evaluators** in fixed precedence: deterministic → hooks → model, short-circuiting on first decision. | [ADR-004](../05-adr/004-layered-policy-model.md), [ADR-009](../05-adr/009-fail-closed-default.md) | FR-03, FR-11, ≥ 80 % actions resolved without the model | None — this is required by FR-11 regardless. |
 | A-5 | The **audit log** is an append-only, hash-chained local store with a query index; the record is durable before the decision returns. | [ADR-006](../05-adr/006-audit-log-integrity.md) | FR-19–FR-22, "zero decisions unlogged" | Storage engine swap behind `AuditStore`. |
-| A-6 | The **UI surface** (P2), *if one exists at all*, reads the daemon's read-only query API and is not in the enforcement path. | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md) (supersedes ADR-001), [ADR-002](../05-adr/002-enforcement-core-language.md) | Q-06 open; no UI stack is decided | §3 below assumed a Next.js server and is **provisional**: ADR-010 forbids a server runtime and a listener, so §3 must be reworked or dropped when Q-06 is answered. §1–2 stand. |
+| A-6 | The **UI surface** is a **read-only TUI** (S-24), in-process, reading the daemon's read-only query API and never in the enforcement path. | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md) (supersedes ADR-001), [ADR-011](../05-adr/011-v1-scope-envelope.md) | **Confirmed 2026-10-02** (Q-06). No web UI exists | §3 below was written for a web UI and is **withdrawn as a build target** — kept only for the component inventory and accessibility notes it still contributes to the TUI. §1–2 stand. |
 
 ### Enforcement-core language — now [ADR-002](../05-adr/002-enforcement-core-language.md) (Proposed)
 
@@ -297,18 +297,22 @@ change touches one directory — the containment R-05 needs.
 
 ---
 
-## 3. UI surface — component tree (P2, gated on Q-06)
+## 3. UI surface — component tree
 
-> **Provisional — do not build from this section yet.** It was written assuming ADR-001's Next.js
-> server (RSC, Server Actions).
-> [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md) supersedes ADR-001 and forbids any
-> server runtime or listener shipping with the product, and defers the UI stack choice to Q-06. The
-> *component decomposition and accessibility notes below remain useful*; the server/client split and
-> the Server Action write path do not survive and are flagged in place.
+> **Withdrawn as a build target (Q-06 answered 2026-10-02).** This section was written for a web UI
+> on ADR-001's Next.js server. v1's UI is a **read-only TUI** inside the same binary
+> ([ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md) item 2,
+> [ADR-011](../05-adr/011-v1-scope-envelope.md)), so **nothing below is built as written**: there is
+> no server/client split, no RSC boundary, and no Server Action write path.
+>
+> It is retained rather than deleted because two things in it carry over to the TUI and are worth not
+> re-deriving — the **view inventory** (dashboard, session list, session detail/timeline, policy
+> *viewer*) and the **accessibility notes** on non-colour decision encoding and keyboard navigation,
+> which become the §1a checks in [`testing-strategy.md`](testing-strategy.md). The TUI's own
+> component tree is Phase 3 work and is not invented here.
 
-Applies only if Q-06 puts a UI in v1. The UI reads `AuditQuery` and, per ADR-010 item 3, is
-**read-only** — policy writes go through the CLI. It is never in the enforcement path, so its
-availability cannot affect a decision.
+The TUI reads `AuditQuery` and, per ADR-010 item 3, is **read-only** — policy writes go through the
+CLI. It is never in the enforcement path, so its availability cannot affect a decision.
 
 ```
 AppShell (server)
@@ -379,10 +383,14 @@ and never removed. Contrast ≥ 4.5:1 for body text in both themes.
 
 | # | Question | Blocks |
 |---|---|---|
-| Q-02 / Q-03 | Platforms and threat model | §2.5 cannot be finished; `Confinement` shape may change |
-| Q-04 | First target CLI | Which `adapters/*` is built in Sprint 1 |
-| Q-06 | UI in v1? | Whether §3 is v1 work or deferred |
-| ADR-002 | Enforcement-core language | Build tooling, package layout, and whether `types/` is genuinely shared or generated |
+Q-02, Q-03, Q-04 and Q-06 were answered on 2026-10-02 — §2.5's primitive is Seatbelt on macOS and
+Landlock + seccomp + netns on Linux, both adapters are v1, and §3 is withdrawn in favour of a TUI
+([ADR-011](../05-adr/011-v1-scope-envelope.md)). What still blocks:
+
+| # | Question | Blocks |
+|---|---|---|
+| Q-01 | Which local model | `ModelRuntime`'s memory budget and whether constrained decoding is available |
+| Q-09 / ADR-002 | Single-language Rust? | Build tooling, package layout, and whether `types/` is genuinely shared or generated — single-language Rust deletes the generation step entirely |
 
 **Related**: [`state-management.md`](state-management.md) ·
 [`routing.md`](routing.md) · [`testing-strategy.md`](testing-strategy.md) ·

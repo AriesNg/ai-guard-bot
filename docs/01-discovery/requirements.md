@@ -66,9 +66,14 @@ Summarised here; full detail in [`user-personas.md`](user-personas.md).
 | Persona | Role | Primary goal | Core pain | Technical level |
 |---|---|---|---|---|
 | **Dana** | Senior product engineer, small startup | Keep agent autonomy without risking her own machine | Runs with permissions skipped; knows it is wrong, will not trade speed for prompts | Expert; will read a config file, will not maintain a glob list |
-| **Miguel** | Platform / DevEx engineer, ~120-engineer company | One reviewable policy governing every agent his org's engineers use | Each CLI has its own permission syntax; cannot roll anything out uniformly | Expert; owns internal tooling and CI |
+| **Miguel** — **not a v1 persona** | Platform / DevEx engineer, ~120-engineer company | One reviewable policy governing every agent his org's engineers use | Each CLI has its own permission syntax; cannot roll anything out uniformly | Expert; owns internal tooling and CI |
 | **Priya** | Security engineer / AppSec lead | An enforcement point and an audit trail, without banning the tools | No evidence of agent behaviour; current answer is a policy memo nobody can verify | Strong, but not the author of the agent workflows |
 | **Tom** | Mid-level engineer, agency, multi-client work | Not leak client A's data into client B's session or to a model provider | Unaware of most risks; needs safe defaults, not a policy language | Intermediate; wants it to just work |
+
+**v1 persona scope (Q-05, 2026-10-02):** the product is a **single-user local tool**, so **P2
+(Miguel) is out of scope for v1** — his goal needs policy distribution and a team view, both
+deferred ([ADR-011](../05-adr/011-v1-scope-envelope.md)). P1 (Dana) is the primary persona; P3
+(Priya) and P4 (Tom) are served by the local audit log and the shipped default policy respectively.
 
 ---
 
@@ -85,8 +90,9 @@ testable; acceptance criteria are stated where the story is not self-evidently v
   decisions on the FR-11 evaluation corpus at or above the FR-11 accuracy bar.
 - **S-02** As a developer, I want every action my AI CLI attempts to be intercepted before it
   executes, so that a decision is made pre-effect rather than reported after the damage.
-  *Accepts:* for the v1 target CLI, no file write, shell command, or network egress reaches the
-  OS without a recorded decision; verified by a red-team action set in E2E.
+  *Accepts:* for **both** v1 adapters (Claude Code hook, MCP proxy), no file write, shell command,
+  or network egress reaches the OS without a recorded decision; verified by a red-team action set in
+  E2E on macOS and Linux.
 - **S-03** As a developer, I want a local model to decide on my behalf when the rules do not map
   to a literal pattern, so that I am not interrupted for judgement calls.
 - **S-04** As a developer, I want actions that violate a rule to be rejected with a stable error
@@ -111,13 +117,17 @@ testable; acceptance criteria are stated where the story is not self-evidently v
   machine with no prior local-model install.
 - **S-10** As a developer, I want a dry-run mode that logs decisions without enforcing them, so
   that I can see what a new rule would have blocked before trusting it.
+  *Scope note (Q-08):* dry-run is **opt-in and not the default**. The product enforces from the
+  first action, so dry-run is a rule-authoring aid rather than an onboarding phase — which moves
+  the burden of proving the default policy onto the pre-release accuracy gate (see R-01).
+- **S-24** As a developer, I want a read-only TUI to browse and filter the audit log in the
+  terminal, so that reviewing a long session does not mean reading raw JSON (Q-06).
+  *Accepts:* keyboard-only operation; every query the TUI can express is also expressible as
+  `guard audit query` producing the same rows; the TUI opens no socket the CLI does not already use
+  and has no write path to policy.
 
 ### P1 — Should Have
 
-- **S-11** As a platform engineer, I want one policy file to work unchanged across every
-  supported CLI, so that I write and review the rule set once.
-- **S-12** As a platform engineer, I want to distribute a baseline policy that engineers can
-  extend but not weaken, so that org guarantees survive local edits.
 - **S-13** As a developer, I want approved actions to run inside a sandbox with an explicit
   filesystem, network, and process allowlist, so that an allow decision made on incomplete
   information is still bounded.
@@ -134,14 +144,30 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 
 ### P2 — Nice to Have
 
-- **S-19** As a developer, I want a local web UI to browse the audit log and edit rules, so that
-  I am not limited to the terminal.
+- **S-19** ~~As a developer, I want a local web UI to browse the audit log and edit rules~~ —
+  **withdrawn** (Q-06): superseded by **S-24** (read-only TUI). A web UI would require a listening
+  process, which [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) item 4 forbids
+  outright.
 - **S-20** As a developer, I want rule suggestions derived from my own dry-run history, so that
   authoring the first policy is guided.
 - **S-21** As a security engineer, I want per-repository policy overlays, so that a sensitive
   repo can be stricter than the machine default.
 - **S-22** As a developer, I want the same engine to guard AI desktop applications, not just
   CLIs.
+
+### Post-v1 — deferred by the Q-05 single-user answer
+
+These were P1/P2 stories; they are not descoped as ideas, only removed from v1, because each needs
+policy distribution or a team view that a single-user local tool has nowhere to put
+([ADR-011](../05-adr/011-v1-scope-envelope.md) derived decision 4).
+
+- **S-11** As a platform engineer, I want one policy file to work unchanged across every
+  supported CLI, so that I write and review the rule set once. *(The underlying capability — one
+  policy, many adapters — is still built and proven by the two v1 adapters; what defers is the
+  multi-engineer rollout the story is written for.)*
+- **S-12** As a platform engineer, I want to distribute a baseline policy that engineers can
+  extend but not weaken, so that org guarantees survive local edits. *(Needs the baseline/project
+  layering dropped from v1; the precedence resolver that would implement it stays.)*
 - **S-23** As a platform engineer, I want a redacted, aggregated team-level view of denials, so
   that I can see which rules fire most and fix the friction.
 
@@ -161,8 +187,12 @@ testable; acceptance criteria are stated where the story is not self-evidently v
   order, and SHALL record the winning rule id on every decision.
 - **FR-04** The system SHALL validate a policy file on load and refuse to start on a policy that
   is malformed or references an undefined hook.
-- **FR-05** The system SHALL support a machine-level baseline policy that a project-level policy
-  may narrow but not widen.
+- **FR-05** The system SHALL resolve policy sources through a precedence resolver in which a
+  narrower source may narrow but not widen a broader one. *(Post-v1 by Q-05: with a single-user
+  local tool there is no distributed baseline to layer, so v1 ships one policy source. The resolver
+  itself is still built — deterministic-over-model and specific-over-general precedence need it,
+  [ADR-004](../05-adr/004-layered-policy-model.md) — and the layering turns on when distribution
+  arrives.)*
 - **FR-06** The system SHALL support user-supplied hook programs as additional evaluators,
   receiving the action as structured input and returning a decision.
 
@@ -268,8 +298,10 @@ testable; acceptance criteria are stated where the story is not self-evidently v
   agent SHALL NOT be able to weaken the policy that guards it, and the attempt SHALL be logged.
 - Local model inputs are treated as untrusted data, never as instructions to the engine; the
   model's output is constrained to a decision enum, not free-form action.
-- Threat model is stated explicitly in Phase 3 and distinguishes an **erring** agent from an
-  **actively escaping** one (see Risk R-02 and Open Question Q-03).
+- **Threat model (Q-03, answered 2026-10-02): the adversary is an agent that *errs*, not one
+  actively escaping.** Phase 3 states this explicitly and publishes what is and is not stopped.
+  Prompt-injection-driven escape is **in scope for detection and logging and explicitly not claimed
+  to be prevented** ([ADR-008](../05-adr/008-sandbox-confinement-primitive.md) item 12; Risk R-02).
 
 ### Availability / reliability
 
@@ -289,15 +321,28 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 
 ### Accessibility
 
-- Any UI surface meets **WCAG 2.1 AA**: keyboard operable end to end, visible focus, contrast
-  ≥ 4.5:1 for body text, no colour-only encoding of a decision outcome, and screen-reader
-  announcement of live decision updates.
-- CLI output is usable without colour and respects `NO_COLOR`.
+v1's surfaces are the **terminal (CLI) and the read-only TUI audit viewer** (Q-06). WCAG 2.1 AA
+applies to both, read as it applies to a terminal application:
+
+- **No information conveyed by colour alone.** Every decision outcome carries a text token
+  (`ALLOW`/`DENY`/`ASK`/`MASK`) alongside any styling, and denial reasons are legible with all ANSI
+  styling stripped. CLI output respects `NO_COLOR` and degrades to plain text when not a TTY.
+- **Contrast ≥ 4.5:1 for body text** against the default light and dark terminal profiles of the
+  supported platforms; no reliance on a 256-colour or truecolour palette for meaning.
+- **The TUI is keyboard operable end to end** — no pointer-only affordance — with a visible focus
+  indicator that does not depend on colour, and a documented key map reachable from any view.
+- **Screen-reader usability:** the TUI offers a `--plain` / non-interactive query mode producing the
+  same results as linear text, because a full-screen TUI is not reliably announceable. This is the
+  accessible equivalent path, not an afterthought: `guard audit query` must be able to answer every
+  question the TUI can.
+- The interactive `ask` prompt (FR-13) must be answerable without colour and must state the timeout
+  and the default outcome in text.
 
 ### Browser support
 
-- For the P2 local web UI: last two major versions of Chrome, Edge, Firefox, and Safari. No IE.
-  The UI binds to localhost only.
+**Not applicable.** v1 ships no web UI (Q-06 / [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md));
+the product opens no TCP port in any configuration
+([ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) item 4).
 
 ### Privacy
 
@@ -310,14 +355,19 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 
 | Constraint | Detail |
 |---|---|
-| **No inherited UI stack** | ADR-001 (Next.js/RSC) was scaffold boilerplate and is **superseded by [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md)**: it binds nothing. Any UI must be static assets with no server runtime and no listener, read-only against the daemon; the stack choice waits on Q-06. |
-| **Open by design** | The enforcement core's language/runtime was never settled by any earlier ADR; startup time, latency, and OS-level sandboxing are different constraints. Now proposed in [ADR-002](../05-adr/002-enforcement-core-language.md) (Rust core, TypeScript UI) — awaiting acceptance at the Phase 3 gate. |
+| **Platforms** | **macOS and Linux only** (Q-02, 2026-10-02). Seatbelt on macOS; Landlock + seccomp + network namespace on Linux. **Windows is unsupported and no Windows boundary claim is published.** |
+| **Threat model** | **An agent that errs**, not one actively trying to escape (Q-03). Prompt-injection-driven escape is detected and logged, and explicitly **not** claimed to be prevented. |
+| **Distribution** | **Single-user local tool** (Q-05). No control plane, no centrally-managed baseline in v1. |
+| **Interface** | **CLI + config file + a read-only TUI audit viewer** (Q-06). No web UI. WCAG 2.1 AA applies to the terminal and TUI surfaces. |
+| **Day-one posture** | **Enforcing immediately** (Q-08). No dry-run grace period; `guard dry-run` is opt-in. |
+| **No inherited UI stack** | ADR-001 (Next.js/RSC) was scaffold boilerplate and is **superseded by [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md)**: it binds nothing. The UI is a TUI, in-process, with no server runtime and no listener, read-only against the daemon. |
+| **Open by design** | The enforcement core's language/runtime was never settled by any earlier ADR; startup time, latency, and OS-level sandboxing are different constraints. Now proposed in [ADR-002](../05-adr/002-enforcement-core-language.md) (Rust core, TypeScript UI) — **amendment pending**: with a TUI rather than a web UI the TypeScript half has no consumer, so the recommendation is single-language Rust (Q-09, [ADR-011](../05-adr/011-v1-scope-envelope.md)). |
 | **Local model runtime** | Pluggable (Ollama or equivalent). No hard dependency on one model or vendor — see [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). |
 | **No vendor SDK in the enforcement path** | And no cloud service in the policy-decision path. |
 | **Host agents unmodified** | Integration through documented hook/permission interfaces; no forks or patches — see [ADR-007](../05-adr/007-cli-integration-strategy.md). |
 | **Hardware floor** | Must run on a developer laptop with 16 GB RAM alongside the IDE and the agent — this caps model size and is the real constraint behind the latency targets. |
 | **Compliance** | Not a certified control. The audit log is designed to be *evidence* for SOC 2 / ISO 27001 change-and-access narratives, but no certification claim is made in v1. |
-| **Timeline** | Not yet set (Open Question Q-07). |
+| **Timeline** | **Side project, intermittent** (Q-07, 2026-10-02). No fixed date. Each sprint must land something independently useful, and the documents must carry enough context to survive multi-week gaps. |
 
 ---
 
@@ -325,20 +375,36 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 
 ### In Scope (v1)
 
-- Interception and pre-execution evaluation for **one** AI CLI end-to-end, with the engine
-  designed for the others (Q-04 picks which).
+- Interception and pre-execution evaluation for **two** AI CLI integrations end-to-end (Q-04): a
+  **hook-based adapter for Claude Code** and the **vendor-neutral MCP proxy**. Two shapes, not one,
+  because a `CliAdapter` contract validated against a single implementation is a contract shaped by
+  that implementation — see [ADR-007](../05-adr/007-cli-integration-strategy.md).
 - Intent-level natural-language rules plus deterministic rules, with documented precedence.
 - Local deterministic + small-model evaluation; no network in the decision path.
 - Structured denial responses the host agent can parse.
 - Outbound secret/PII masking; inbound prompt-injection screening (P1).
 - Append-only, hash-chained, queryable audit log with structured export.
-- Dry-run mode, one-off interactive override, hot policy reload.
-- Single-machine, single-developer installation.
-- Target platform per Q-02.
+- **A read-only TUI audit viewer** (Q-06), in-process, with no listener and no write path.
+- Dry-run mode as an **opt-in** facility, one-off interactive override, hot policy reload.
+- Single-machine, single-developer installation; **enforcing from the first action** (Q-08).
+- **macOS and Linux**, both with a passing adversarial confinement suite on real kernels (Q-02).
 
 ### Out of Scope (v1) — explicitly
 
-- A hosted/SaaS control plane, central policy server, or team dashboard (S-23 is P2).
+- **Windows.** Declared unsupported in v1 and **no Windows boundary claim is published** (Q-02).
+  AppContainer remains the candidate primitive if it returns post-v1. Untested means unsupported,
+  stated plainly rather than shipped quietly — see
+  [ADR-008](../05-adr/008-sandbox-confinement-primitive.md) item 3.
+- **Any web UI, and any process that binds a TCP port**
+  ([ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md)). The audit viewer is a TUI.
+- **Team and multi-developer distribution** (Q-05): a hosted/SaaS control plane, central policy
+  server, team dashboard, or a shared baseline policy layer. **S-11, S-12 and S-23 move to
+  post-v1**, and the platform/DevEx persona (P2, Miguel) is not a v1 persona. The policy
+  *precedence resolver* stays — deterministic-over-model precedence is still needed
+  ([ADR-004](../05-adr/004-layered-policy-model.md)) — only the baseline/project layering drops.
+- **Defence against an agent actively trying to escape** (Q-03). v1's adversary is an agent that
+  errs. Prompt-injection-driven escape attempts are detected and logged; preventing them is not
+  claimed.
 - Guarding AI **desktop** applications (S-22, P2) or IDE-embedded agents.
 - Guarding agents running on CI runners or remote/cloud dev environments.
 - Multi-tenant or RBAC'd operation; there is one local user in v1.
@@ -346,7 +412,6 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 - Rewriting agent *prompts* to change behaviour — the engine judges actions, it does not steer
   the model.
 - Training, fine-tuning, or shipping our own model.
-- Windows support, unless Q-02 says otherwise.
 - Certification against a compliance framework.
 - Code review of the agent's output, static analysis, or secret scanning of the repo at rest —
   this guards actions in flight, not the codebase.
@@ -358,12 +423,12 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 
 | # | Risk | Impact | Likelihood | Mitigation |
 |---|---|---|---|---|
-| **R-01** | **Local model decisions are wrong.** A false allow defeats the product; a false deny makes it unusable and it gets uninstalled. | Critical | High | Deterministic rules decide first and cover all catastrophic classes (credential paths, destructive commands, egress) so the model is never the only thing between the agent and an irreversible action. Versioned evaluation corpus with the FR-11 accuracy gates enforced in CI; dry-run mode (S-10) to measure false-deny rate on real sessions before enforcing; one-off override (S-15) as the escape hatch; per-rule confidence thresholds with `ask` as the middle outcome. |
-| **R-02** | **The sandbox is escapable**, particularly by an agent driven by prompt injection rather than one merely erring. | Critical | Medium | Publish a concrete threat model naming what is and is not stopped (FR-18); never claim absolute isolation; choose an OS-native primitive over a hand-rolled boundary and record the choice in an ADR; treat the engine's own config and log as outside the agent's reach; screen inbound content for injection (S-16); assume breach and rely on the audit log to detect it. Q-03 must be answered before Phase 3 fixes this. |
+| **R-01** | **Local model decisions are wrong.** A false allow defeats the product; a false deny makes it unusable and it gets uninstalled. **Raised to the top risk by Q-08** (2026-10-02): with the product enforcing from the first action, there is no observation period in which false denies are harmless. | Critical | High | Deterministic rules decide first and cover all catastrophic classes (credential paths, destructive commands, egress) so the model is never the only thing between the agent and an irreversible action. Versioned evaluation corpus with the FR-11 accuracy gates enforced in CI — **now a release blocker, not a target**, since nothing else stands between a bad model and a first-run denial. The **shipped default policy must be conservative and measured against real sessions before release** (the work dry-run would otherwise have done in the user's first session is moved pre-release). One-off override (S-15) and a denial reason that names the rule and the remedy (S-04) are the difference between a tuning annoyance and an uninstall; per-rule confidence thresholds with `ask` as the middle outcome. `guard dry-run` (S-10) remains available voluntarily. |
+| **R-02** | **The sandbox is escapable**, particularly by an agent driven by prompt injection rather than one merely erring. | Critical | Medium | Publish a concrete threat model naming what is and is not stopped (FR-18); never claim absolute isolation; choose an OS-native primitive over a hand-rolled boundary and record the choice in an ADR; treat the engine's own config and log as outside the agent's reach; screen inbound content for injection (S-16); assume breach and rely on the audit log to detect it. **Q-03 answered 2026-10-02:** the adversary is an erring agent, so confinement by allowlist is sufficient for the v1 claim — and the no-prevention-claim for injection-driven escape is published rather than implied ([ADR-008](../05-adr/008-sandbox-confinement-primitive.md) item 12). |
 | **R-03** | **Latency makes developers turn it off** — the exact failure mode of the prompts this replaces. | High | Medium | Hard NFR budgets above with the model off the hot path for ≥ 80 % of actions; decision cache keyed on normalised action + policy version; latency surfaced per action (S-17) and in metrics so regressions are visible; a performance regression gate in CI on the reference workload. |
 | **R-04** | **Interception is incomplete** — an action class slips past, giving false assurance, which is worse than no guardrail. | Critical | Medium | Per-CLI coverage matrix published and asserted at startup (FR-23); deny-by-default for unmapped action classes (FR-10); a red-team action set in E2E that tries to reach the OS around the interception points; refuse to advertise support for a CLI until its matrix is complete. |
 | **R-05** | **Host CLI interfaces change or are withdrawn**, breaking integration on a vendor's release cadence we do not control. | High | High | Depend only on documented hook/permission interfaces; keep an adapter per CLI behind one internal contract so a break is contained; version-pin supported CLI versions and detect unknown versions at startup; the MCP-proxy path (FR-09) as the fallback that does not depend on vendor hooks. |
-| **R-06** | **Nobody writes the rules.** Five plain-language rules is still five more than zero, and the product's premise is that authoring effort is what kills adoption. | High | Medium | Ship an opinionated, safe default policy that is useful with no authoring at all; one-command install (S-09, < 5 min); rule suggestions from dry-run history (S-20); shareable policies so one author serves a team (S-11/S-12). |
+| **R-06** | **Nobody writes the rules.** Five plain-language rules is still five more than zero, and the product's premise is that authoring effort is what kills adoption. | High | Medium | Ship an opinionated, safe default policy that is useful with no authoring at all; one-command install (S-09, < 5 min); rule suggestions from dry-run history (S-20); a conservative shipped default is now **load-bearing**, since Q-08 removed the dry-run grace period. *(Shareable policies — S-11/S-12 — would spread one author's work across a team, but are post-v1 by Q-05, so the default policy carries this risk alone in v1.)* |
 | **R-07** | **The guarded agent disables or weakens its own guard** — it has shell access and the engine's config is on the same filesystem. | Critical | Medium | The engine's config, policy, and log are outside the agent's write allowlist by construction; policy hash pinned at load; tamper detection on the log (FR-20); any attempt logged as a distinct high-severity event. |
 
 ---
@@ -468,27 +533,40 @@ Per `.ai/rules/review-criteria.md`:
       (broad autonomy, no interruption, full record) fails.
 - [x] NFRs are quantified — all performance, scalability, and accuracy targets carry numbers.
 - [x] Risks have mitigations — seven risks, each with concrete mitigations, not acknowledgement.
-- [x] Out-of-scope items explicitly listed — twelve.
+- [x] Out-of-scope items explicitly listed — fifteen, including the four v1 exclusions confirmed on
+      2026-10-02 (Windows, web UI, team distribution, defence against an actively escaping agent).
+- [x] Scope envelope confirmed by the product owner — Q-02 … Q-08, recorded in
+      [ADR-011](../05-adr/011-v1-scope-envelope.md).
 
-**Blocking for approval**: Open Questions Q-02, Q-03, Q-04 and Q-06 below.
+**Blocking for approval**: **Q-01** (which local model) and **Q-09** (single-language Rust) below.
+Q-02 … Q-08 were answered on 2026-10-02 and no longer block.
 
 ---
 
 ## Open Questions
 
-Carried from `.ai/context/project-brief.md` and extended. Q-02, Q-03, Q-04 and Q-06 must be
-answered before Discovery is approved, because each changes requirements rather than design.
+Carried from `.ai/context/project-brief.md` and extended. **Seven of the eight were answered by the
+product owner on 2026-10-02**, in a requirements-confirmation session recorded as
+[ADR-011](../05-adr/011-v1-scope-envelope.md). One remains open and blocks Discovery approval.
+
+### Open
 
 | # | Question | Why it blocks |
 |---|---|---|
-| **Q-01** | **Local model choice.** The brief and the latest input name "laya" / "jev"; read as a small local model in the **Llama**/Gemma/Qwen class. Confirm the intended model and runtime. | Sets the memory floor and the P95 model-path latency target. |
-| **Q-02** | **Target platforms.** macOS only, or macOS + Linux + Windows? | Decides the sandbox primitive and whether Windows is in or out of scope. |
-| **Q-03** | **Threat model.** Guard against an agent that *errs*, or one *actively trying to escape* (prompt-injection-driven)? | Changes R-02's mitigation from "confine by config" to "assume adversary", and the whole sandbox design. |
-| **Q-04** | **First target CLI**, supported end-to-end. | Fixes which hook interface the v1 interception depends on. |
-| **Q-05** | **Distribution.** Single-user local tool, or team deployment with centrally-managed policy? | Promotes or demotes S-11/S-12/S-23 and the baseline-policy requirement. |
-| **Q-06** | **UI scope for v1.** CLI-and-config-file only, or is a local UI in v1? | Determines whether the browser accessibility NFRs apply to v1 at all, and closes item 2 of [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md). Recommendation: CLI and config file only — every v1 story is reachable from a terminal. Note WCAG 2.1 AA still applies to the CLI surface. |
-| **Q-07** | **Timeline / target date.** | Needed for the phase effort estimate. |
-| **Q-08** | **Enforcement posture on day one.** Ship enforcing by default, or dry-run by default for the first N sessions? | Trades R-01 (false denies) against the product's core promise. Recommendation: dry-run for the first session, then enforce, with the transition explicit. |
+| **Q-01** | **Local model choice.** The brief names "laya" / "jev". The owner confirms **"laya" is a specific model**, not a Llama-class placeholder — the exact name, and where it comes from (an Ollama tag, a Hugging Face repo, something internal), is still needed. | Sets the memory floor against the < 5 GB budget and the P95 model-path latency target, and makes FR-11's accuracy gate measurable. [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) stands as written — the runtime is pluggable — but its numbers are unverifiable until the model is named. |
+| **Q-09** | **Single-language Rust?** Now that Q-06 answered with a TUI, nothing consumes the TypeScript half of [ADR-002](../05-adr/002-enforcement-core-language.md). Recommendation: build the TUI in-process in Rust, ship one binary, delete the schema-codegen step. | Raised *by* the answers rather than carried from the brief. Decides whether a Node runtime ships inside a security tool, and whether S-09's one-command install is one binary. |
+
+### Answered 2026-10-02
+
+| # | Question | Answer | Effect on these requirements |
+|---|---|---|---|
+| **Q-02** | Target platforms | **macOS + Linux, both tested. Windows unsupported in v1.** | Windows moves to out-of-scope. No Windows boundary claim is published, since an untested claim is deleted (ADR-008). |
+| **Q-03** | Threat model | **An agent that errs**, not one actively escaping | R-02's mitigation is "confine by configuration". Prompt-injection escape is detected and logged, explicitly **not** claimed to be prevented. |
+| **Q-04** | First integration | **Two adapters at ship: Claude Code (hook-based) + the MCP proxy** | FR-08 and FR-09 are both v1. Two integration shapes validate the `CliAdapter` contract rather than one shaping it. |
+| **Q-05** | Distribution | **Single-user local tool** | **S-11, S-12, S-23 move to post-v1**; the baseline/project policy layering drops out of v1 (the precedence *resolver* stays — FR-05). Persona P2 (Miguel) is not a v1 persona. |
+| **Q-06** | UI scope | **CLI + config file + a read-only TUI audit viewer** | No web UI, no browser. The browser/WCAG surface becomes the **terminal and TUI** surface. S-19/S-20 gain a TUI path. |
+| **Q-07** | Timeline | **Side project, intermittent** | Each sprint must land something independently useful; design is documented up front because context will not survive the gaps. |
+| **Q-08** | Day-one posture | **Enforcing immediately** — no dry-run grace period | The Discovery recommendation (dry-run first session) was **not** taken. The promise holds from the first action; in exchange **R-01 becomes the top risk** and its mitigations become release blockers — see R-01 below. `guard dry-run` remains available voluntarily. |
 
 ---
 
@@ -496,6 +574,7 @@ answered before Discovery is approved, because each changes requirements rather 
 
 - `.ai/context/project-brief.md` — source brief, including Background / Existing Problems
 - [`user-personas.md`](user-personas.md) — persona detail
-- [`../05-adr/001-use-react-and-typescript.md`](../05-adr/001-use-react-and-typescript.md) — binding for any UI surface
-- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-009 (Proposed), which answer the architectural questions these requirements raise; the index's "Blocked on human input" table maps Q-01 … Q-06 onto the ADRs each one gates
+- [`../05-adr/011-v1-scope-envelope.md`](../05-adr/011-v1-scope-envelope.md) — the confirmation session of 2026-10-02 that answered Q-02 … Q-08, and the consequences of each answer
+- [`../05-adr/010-supersede-adr-001-no-web-server-ui.md`](../05-adr/010-supersede-adr-001-no-web-server-ui.md) — supersedes ADR-001; the UI constraints that make a TUI the answer to Q-06
+- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-011 (Proposed), which answer the architectural questions these requirements raise; the index's "Blocked on human input" table now lists only Q-01 and Q-09
 - [`../04-solution-design/`](../04-solution-design/) — Phase 4 documents, drafted ahead of the Phase 3 gate (see the note at the top of each)

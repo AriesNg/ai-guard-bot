@@ -44,12 +44,30 @@ passing test are removed from the published threat model (FR-18).
 | **Accuracy** | Custom harness over the versioned corpus | FR-11: ≥ 95 % deny recall, ≤ 2 % false-deny. FR-13: ≥ 99 % structured-secret recall, ≤ 1 % FP, ≥ 90 % semantic-PII recall |
 | **Adversarial / red-team** | Scripted action set + real host CLI | Every known route around interception; policy self-weakening; audit tampering; prompt-injection payloads (S-16) |
 | **Performance** | `criterion` / `k6`-style local harness on the fixed reference workload | Every budget in the NFR table, P50/P95/P99, plus the ≥ 80 %-without-model share |
-| **E2E** | Real target CLI driven headlessly against a scratch repo | The critical journeys in §5 |
-| **UI component** | Testing Library + Vitest *(P2, Q-06)* | `DecisionBadge` non-colour encoding, timeline keyboard nav, editor validation surfacing, daemon-unreachable state |
-| **Visual** | Playwright screenshots *(P2, Q-06)* | Dashboard, session timeline, policy editor — light/dark, 3 viewports |
-| **Accessibility** | `axe-core` in component + E2E *(P2, Q-06)* | WCAG 2.1 AA: zero serious/critical violations, keyboard-only journeys, contrast |
+| **E2E** | **Both** v1 adapters driven headlessly against a scratch repo — Claude Code via its hook interface and the MCP proxy (Q-04) — **on macOS and Linux** | The critical journeys in §5, each run twice per OS, once per adapter |
+| **TUI component** | Headless terminal emulator (`expectrl`/`vt100`-class) rendering to a virtual screen, asserted as a text grid | Audit-view filtering and paging, key map, focus movement, empty and daemon-unreachable states, `DECISION` tokens present as text |
+| **Snapshot** | Golden text grids of each TUI view at 80×24 and 120×40, plus CLI output snapshots with and without `NO_COLOR` | Layout does not break at the narrow width; styled and unstyled output carry the same information |
+| **Accessibility** | Terminal-surface checks (see §3a) — not `axe-core`, which has no DOM to inspect here | WCAG 2.1 AA as it applies to a terminal: no colour-only meaning, keyboard-only operation, contrast of the chosen palette, and the `guard audit query` equivalent path |
 
 Tests are written alongside implementation, never deferred (`.ai/workflow.md`).
+
+### 1a. Accessibility testing for a terminal product
+
+Q-06 fixed v1's surfaces as the **CLI and a read-only TUI**, so there is no browser and no DOM: the
+usual `axe-core` + Playwright pairing has nothing to inspect, and claiming it as coverage would be
+false assurance. WCAG 2.1 AA still applies, and these are the mechanical checks that stand in for it.
+
+| Check | How it is tested | Pass condition |
+|---|---|---|
+| **No colour-only meaning** (1.4.1) | Render every decision output with styling stripped (`NO_COLOR=1`, non-TTY) and diff the information content against the styled render | Each outcome carries its literal token — `ALLOW`/`DENY`/`ASK`/`MASK` — and each denial names rule id and remedy, in both renders |
+| **Contrast ≥ 4.5:1** (1.4.3) | Compute the contrast ratio of every colour pair the product emits against the default light and dark profiles of macOS Terminal, iTerm2, GNOME Terminal and Windows Terminal | No pair below 4.5:1 for body text, 3:1 for non-text indicators; failures block the palette, not the release note |
+| **Keyboard operable end to end** (2.1.1) | Drive the TUI through the headless terminal with keystrokes only, visiting every view and every action | Every view reachable and every action performable; no state requires a mouse event |
+| **Visible, non-colour focus** (2.4.7) | Golden text grid of each view with focus on each focusable element | The focused element is distinguishable in the *text* grid (marker, inverse, border), not by colour attribute alone |
+| **Screen-reader equivalent path** (1.3.1, 4.1.2) | For each TUI query, assert `guard audit query` with the equivalent flags returns the same rows in linear text | Row-for-row identical result sets; a full-screen TUI is not reliably announceable, so this path is the conformance route, and it is tested, not merely documented |
+| **Timed interaction** (2.2.1) | The FR-13 interactive `ask` prompt under a simulated slow responder | The prompt states its timeout and default outcome in text, and the timeout is configurable |
+| **Resize / reflow** (1.4.10) | Snapshot each view at 80×24 and 120×40 | No truncation of a decision reason or rule id at the narrow width |
+
+Accessibility is a blocking CI stage on the same footing as the accuracy gate, not a nightly report.
 
 ---
 
@@ -172,15 +190,30 @@ flowchart LR
     D --> F[adversarial gate]
     E --> G[performance gate]
     F --> G
-    G --> H[E2E on target CLI]
-    H --> I[a11y + visual, if UI in v1]
+    G --> H[E2E: macOS + Linux x 2 adapters]
+    H --> I[a11y: terminal + TUI checks]
     I --> J[build artefacts]
 ```
+
+**The matrix (Q-02, Q-04).** Stages C, D, F, H and I run on **macOS and Linux**, on runners with a
+real kernel, because the confinement primitives under test are kernel features: Seatbelt on macOS,
+Landlock + seccomp + network namespaces on Linux. A container-only Linux runner cannot exercise
+Landlock reliably and is not an acceptable substitute — if hosted runners cannot do this, that is a
+Sprint-1 finding that changes the platform answer rather than something to paper over
+([ADR-011](../05-adr/011-v1-scope-envelope.md) derived decision 2). **No Windows job exists**, and
+no Windows boundary claim is published, so there is nothing to verify there.
+
+Stage H runs the full journey set **twice per OS** — once through the Claude Code hook adapter and
+once through the MCP proxy — which is what makes the vendor-agnostic claim tested rather than
+asserted.
 
 - Every stage is blocking. There is no "allowed to fail" stage, because each one stands for a
   reason the product would be abandoned.
 - Stages A–D run on every push; the accuracy, adversarial, and performance gates run on every PR to
   the default branch and nightly.
+- **The accuracy gate is a release blocker, not a target** (Q-08, R-01): with the product enforcing
+  from the first action there is no dry-run period in which a false deny is harmless, so the shipped
+  default policy must clear the FR-11 bar against the corpus before any release.
 - `guard policy validate` runs against the shipped default policy in CI, so the zero-authoring path
   (R-06, persona P4) cannot silently break.
 - No network in the test environment for the accuracy and integration stages — this is how FR-12
@@ -215,18 +248,20 @@ flowchart LR
 | R-05 | Per-version adapter fixtures |
 | R-06 | CI validation of the default policy |
 | R-07 | Adversarial "self-weakening" |
-| Accessibility NFR | a11y layer, `axe-core`, keyboard-only E2E |
+| Accessibility NFR | §1a terminal/TUI checks, blocking in CI stage I |
+| S-24 (TUI audit viewer) | TUI component + snapshot layers; the `guard audit query` equivalence check in §1a |
 
 ---
 
 ## 8. Blocking questions
 
+Q-02, Q-03, Q-04 and Q-06 were answered on 2026-10-02 and are reflected above
+([ADR-011](../05-adr/011-v1-scope-envelope.md)). What remains:
+
 | # | Question | Blocks |
 |---|---|---|
-| ADR-002 | Enforcement-core language | Unit/property/perf tool choices |
-| Q-04 | First target CLI | Which host the E2E journeys run against |
-| Q-02 / Q-03 | Platforms and threat model | CI matrix; which boundary claims exist to verify |
-| Q-06 | UI in v1? | Whether the component/visual/a11y layers are v1 work |
+| Q-01 | Which local model | The accuracy-gate baseline: the corpus thresholds are only meaningful against a named model |
+| Q-09 / ADR-002 | Single-language Rust? | Unit/property/perf tool choices, and whether a Vitest-side toolchain exists at all |
 
 **Related**: [`component-design.md`](component-design.md) ·
 [`state-management.md`](state-management.md) · [`routing.md`](routing.md) ·
