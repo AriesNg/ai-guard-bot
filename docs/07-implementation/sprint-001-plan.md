@@ -11,7 +11,7 @@
 > than superseded, because it never applied.
 >
 > **Gate.** This sprint is **blocked on H-1 — Phase 3 approval.** Nothing below starts before the
-> four Phase 3 documents are approved and ADRs 002–011 move to Accepted. The plan is written now so
+> four Phase 3 documents are approved and ADRs 002–012 move to Accepted. The plan is written now so
 > the task-level sequencing can be reviewed in the same sitting as the design.
 >
 > Carries assumptions **A-1 … A-3** from [`../03-system-design/architecture.md`](../03-system-design/architecture.md)
@@ -189,10 +189,10 @@ flowchart TD
 
 | | |
 |---|---|
-| **Deliverable** | The five-key comparison (decision strength → evaluator authority → specificity → source layer → declaration order); `specificity()` with the published weight table; `specificityIndex` precomputed **once per policy version**. One implementation, in `core/policy`, with no second copy anywhere. |
-| **Acceptance** | **Property-tested over generated rule sets for totality, antisymmetry and transitivity** — the three properties that make "more specific wins" an order rather than an intuition. Plus the named cases: an exact match outranks a pattern that also matches it; an intent rule never outranks a deterministic rule on specificity; **a model `deny` beats a deterministic `allow`** (key 1 before key 2, deliberately — [`api-design.md`](../03-system-design/api-design.md) §6.1); and two rules with **different decisions** tying on all five keys are rejected at load with `POLICY_CONFLICT` **naming both rule ids**. |
+| **Deliverable** | The five-key comparison (decision strength → evaluator authority → specificity → source layer → declaration order); `specificity()` with the published weight table; `specificityIndex` precomputed **once per policy version**. One implementation, in `core/policy`, with no second copy anywhere. **The resolver returns one `Elimination` per loser** — the losing rule, what it lost to, and the key that decided it ([`api-design.md`](../03-system-design/api-design.md) §6.4) — as a return value, not a log line, because S-2's decision trace and `guard explain` consume it ([ADR-012](../05-adr/012-decision-trace.md)). |
+| **Acceptance** | **Property-tested over generated rule sets for totality, antisymmetry and transitivity** — the three properties that make "more specific wins" an order rather than an intuition. Plus the named cases: an exact match outranks a pattern that also matches it; an intent rule never outranks a deterministic rule on specificity; **a model `deny` beats a deterministic `allow`** (key 1 before key 2, deliberately — [`api-design.md`](../03-system-design/api-design.md) §6.1); and two rules with **different decisions** tying on all five keys are rejected at load with `POLICY_CONFLICT` **naming both rule ids**. Plus one more property, which is what makes the later trace trustworthy: **every loser in a resolved set carries exactly one eliminating key, and replaying that key's comparison reproduces the loss.** A resolver that reports "lost on specificity" where the decision was really made on source layer would put a plausible falsehood inside the audit hash. |
 | **Verified by** | `just test core::policy::precedence` — `tests/policy/precedence_props.rs` (proptest) and `tests/policy/precedence_cases.rs`. Human-observable output via S1-09. |
-| **Traces to** | [`api-design.md`](../03-system-design/api-design.md) §6 |
+| **Traces to** | [`api-design.md`](../03-system-design/api-design.md) §6, §6.4 |
 | **Estimate** | 2 days |
 | **Note** | Never mocked, here or in any later sprint. S-1's `policy.simulate` and S-2's `policy.diff` call this same code, which is what makes a simulation unable to disagree with enforcement. |
 
@@ -200,7 +200,7 @@ flowchart TD
 
 | | |
 |---|---|
-| **Deliverable** | `GuardError` with the **eighteen** codes of [`api-design.md`](../03-system-design/api-design.md) §5 as a closed enum, each carrying its `retryable` value and an actionable `message` that says what to do instead. |
+| **Deliverable** | `GuardError` with the **twenty** codes of [`api-design.md`](../03-system-design/api-design.md) §5 as a closed enum — the table now includes `RECORD_NOT_FOUND`, `TRACE_UNAVAILABLE` and `POLICY_VERSION_UNAVAILABLE`, added by [ADR-012](../05-adr/012-decision-trace.md) — each carrying its `retryable` value and an actionable `message` that says what to do instead. |
 | **Acceptance** | (a) An **exhaustiveness test** asserts the code set matches the documented table exactly — a code added to the design and not to the code, or the reverse, **fails the build**. This test is what keeps the set closed; without it, "closed" is a comment. (b) Every code's `retryable` value matches the table. (c) Only the codes reachable in Sprint 1 are *constructible* so far (`POLICY_INVALID`, `POLICY_WIDENS_BASELINE`, `POLICY_CONFLICT`, `NORMALISATION_FAILED`, `INVALID_REQUEST`); the rest exist as variants with a per-code checklist naming the sprint that must make each constructible, so an orphaned code stays visible. |
 | **Verified by** | `just test core::error` — `tests/error/catalogue_matches_design.rs`, which parses the table out of `api-design.md` §5 and diffs it against the enum. |
 | **Traces to** | [`api-design.md`](../03-system-design/api-design.md) §5 |
@@ -305,6 +305,7 @@ edit — and each of these is a correction, not a decision reversal.
 | 2 | [`component-design.md`](../04-solution-design/component-design.md) §1 | `src/app/` shown as the Next.js App Router, pre-ADR-010 | Re-describe `app/` as the CLI + TUI binary (A-6) |
 | 3 | [`api-design.md`](../03-system-design/api-design.md) §4 | `--explain` absent | Add one row — **only if §7 option A is accepted at H-1** |
 | 4 | `README.md`, `package.json` | Describe a web-app scaffold | Rewritten / removed in S1-10 |
+| 5 | This document, §4 S1-07 | Said "eighteen" `GuardError` codes where §5's table held seventeen, before [ADR-012](../05-adr/012-decision-trace.md) added three | Corrected to **twenty**, counted from the table itself. S1-07's exhaustiveness test parses that table, so the prose count cannot be the authority — this row records why the number moved |
 
 ---
 
@@ -315,10 +316,12 @@ Nothing here is a `TODO` in code; this list is where unfinished work lives inste
 | # | Item | Disposition |
 |---|---|---|
 | B-1 | Audit-store benchmark spike | **S-1** (S1-T6 there) — it needs a durability target, not a schema |
-| B-2 | The remaining thirteen `GuardError` codes becoming *constructible* | Ticked by the sprint that owns each (S1-07 acceptance (c)) |
+| B-2 | The remaining fifteen `GuardError` codes becoming *constructible* | Ticked by the sprint that owns each (S1-07 acceptance (c)); `RECORD_NOT_FOUND`, `TRACE_UNAVAILABLE` and `POLICY_VERSION_UNAVAILABLE` become constructible in **S-2**, with `explain` and `replay` |
 | B-3 | Policy fixtures for `mcp.*` server-identity matching | S-5, when the MCP adapter exists to produce them |
 | B-4 | Performance gate as a CI stage | **S-1** — Sprint 1 records one datum (policy load); a gate needs a reference workload |
 | B-5 | The default policy `guard policy init` writes | Pre-release (PR-T1 / PR-T2) — a release blocker, deliberately not here |
+| B-6 | `TraceBuilder`, `ProvenanceStamp`, and the trace inside the audit record | **S-1 and S-2** ([`implementation-plan.md`](implementation-plan.md) §2). Nothing decides in Sprint 1 — no daemon, no `decide` — so there is no decision to trace yet; the one trace obligation that *is* in this sprint is S1-06's `Elimination` return value, because the resolver is built here and S-2 cannot retrofit grounds it was never given |
+| B-7 | `guard explain` / `guard replay` and the determinism gate | **S-2** ([`testing-strategy.md`](../04-solution-design/testing-strategy.md) §2.4). The determinism corpus starts with S-2's own recorded history and is append-only from then on |
 
 ---
 

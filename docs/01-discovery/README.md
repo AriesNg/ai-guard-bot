@@ -12,8 +12,8 @@ Understand the problem, users, market, and constraints before designing anything
 ## Deliverables
 - [x] Problem statement
 - [x] User personas (4)
-- [x] User stories (P0/P1/P2) — S-01 … S-24, with S-11/S-12/S-23 deferred post-v1 and S-19 withdrawn
-- [x] Functional requirements — FR-01 … FR-26
+- [x] User stories (P0/P1/P2) — S-01 … S-26, with S-11/S-12/S-23 deferred post-v1 and S-19 withdrawn
+- [x] Functional requirements — FR-01 … FR-32, including FR-30 – FR-32 (decision trace, explain, replay)
 - [x] Non-functional requirements — quantified
 - [x] Constraints & risks — R-01 … R-07 with mitigations
 - [x] Scope boundaries — in-scope and 15 explicit out-of-scope items
@@ -37,6 +37,7 @@ Understand the problem, users, market, and constraints before designing anything
 | Interface | CLI + config file + read-only TUI audit viewer. No web UI, no TCP port |
 | Posture | Enforcing from the first action; dry-run is opt-in |
 | Timeline | Side project, intermittent — each sprint independently useful |
+| Traceability | Every decision carries its own trace inside the audit hash, with `guard explain` and `guard replay` ([ADR-012](../05-adr/012-decision-trace.md)) |
 
 Full reasoning and the consequences of each answer:
 [`../05-adr/011-v1-scope-envelope.md`](../05-adr/011-v1-scope-envelope.md).

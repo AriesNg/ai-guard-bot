@@ -75,7 +75,7 @@ the connection.
 
 ### 3.1 Method catalogue
 
-Seventeen methods. `W` = mutating, `R` = read-only (§3.2).
+Nineteen methods. `W` = mutating, `R` = read-only (§3.2).
 
 | Method | Caller | R/W | Budget | Request | Response |
 |---|---|---|---|---|---|
@@ -93,9 +93,25 @@ Seventeen methods. `W` = mutating, `R` = read-only (§3.2).
 | `audit.verify` | CLI / TUI | R | — | `{ fromSeq?, toSeq? }` | `VerifyResult` |
 | `audit.stream` | CLI / TUI | R | — | `{ sinceSeq? }` | server-push `AuditRecord` |
 | `audit.export` | CLI | R | — | `{ format, filter }` | stream |
+| `decision.explain` | CLI / TUI | R | **P95 < 50 ms** | `{ actionId }` or `{ seq }` | `ExplainResult` |
+| `decision.replay` | CLI / TUI | R | **det. P95 < 100 ms / model < 300 ms** | `ReplayRequest` | `ReplayResult` |
 | `health` | any | R | < 20 ms | `{}` | `HealthReport` |
 | `metrics` | any | R | < 50 ms | `{}` | `MetricsSnapshot` |
 | `install.probe` | CLI | R | < 200 ms | `{ agent? }` | `{ adapters: AdapterState[] }` |
+
+`decision.explain` and `decision.replay` discharge FR-31 and FR-32
+([ADR-012](../05-adr/012-decision-trace.md) item 7). Both are **`R`**, and the distinction between
+them is the whole point:
+
+- **`explain` never evaluates anything.** It reads one record and renders its `trace` and
+  `provenance` ([`data-model.md`](data-model.md) §5.5). It does not consult the live policy, the model
+  runtime, or the filesystem, so its answer cannot change after the fact and is identical on a machine
+  whose policy has since been rewritten. That is why it is cheap enough to have a < 50 ms budget and
+  why it works while the model runtime is down.
+- **`replay` does evaluate**, against a *named* policy version, and returns both outcomes plus a
+  structured diff. It **never enforces, never appends a record, and never populates the decision
+  cache** — a replay that could write would make the audit log self-referential and a replay that
+  could enforce would be a remote-execution surface on a read-only method.
 
 `install.probe` is new in Phase 3 and exists because FR-27 made registration state a **probed**
 property rather than a remembered one ([`data-model.md`](data-model.md) §6.4). `guard uninstall` and
@@ -182,7 +198,51 @@ interface AuditQuery {
 
 Exactly the five FR-21 dimensions, each backed by an index ([`data-model.md`](data-model.md) §6.2).
 Cursor paging is on `seq`, so a page boundary cannot duplicate or skip a record even while the log is
-being appended to.
+being appended to. Trace-level filters (candidate rule, eliminating key, provenance field) are
+**post-index predicates**, not query fields here — `data-model.md` §6.2 states the cost.
+
+```ts
+// ---- decision.explain / decision.replay ----
+interface ExplainResult {
+  record: AuditRecord;                    // the record as stored, trace and provenance included
+  rendered: {
+    verdict: string;                      // "deny — R-intent-02 (model, confidence 0.91 >= 0.80)"
+    path: string[];                       // one line per trace step, in produced order
+    comparison: string[];                 // one line per elimination, naming the deciding key
+    provenance: string[];                 // one line per component whose version can move an outcome
+  };
+  warnings: string[];                     // e.g. "trace truncated: 4 candidates dropped"
+}
+
+interface ReplayRequest {
+  actionId: string;                       // or seq
+  againstPolicyVersion?: string;          // default: the version recorded on the original decision
+  includeModel?: boolean;                 // default true; false replays the deterministic prefix only
+}
+
+interface ReplayResult {
+  original: { decision: DecisionKind; ruleIds: string[]; evaluator: string; confidence?: number };
+  replayed: { decision: DecisionKind; ruleIds: string[]; evaluator: string; confidence?: number };
+  outcome: 'identical' | 'divergent' | 'unreplayable';
+  divergence?: {
+    fields: ('decision' | 'ruleIds' | 'evaluator' | 'confidence')[];
+    provenanceDelta: { field: string; then: string; now: string }[];
+    attribution: 'policy' | 'provenance' | 'model-nondeterminism' | 'unexplained';
+  };
+  unreplayableReason?: 'record-predates-trace' | 'policy-version-unavailable' | 'ask-outcome';
+}
+```
+
+**`attribution` is the field that makes this useful rather than merely interesting.** A divergence
+whose `provenanceDelta` is empty and whose policy version is unchanged is attributed `unexplained` —
+and `unexplained` on the deterministic or cache path is a **correctness defect**, failing the CI job in
+[`../04-solution-design/testing-strategy.md`](../04-solution-design/testing-strategy.md) §2.3, not a
+curiosity to be logged. `model-nondeterminism` is only assignable when the deciding step is a `model`
+step and the weights digest matches, which keeps it from becoming the excuse every divergence gets.
+
+`ask` outcomes are `unreplayable` by construction: the decision was a human's answer, and re-running
+the pipeline would either re-ask or substitute machine judgement for the answer that was actually
+given. Saying so is more honest than replaying the prompt and calling the result the same decision.
 
 ```ts
 // ---- audit.verify ----
@@ -224,15 +284,20 @@ a developer infer "degraded" as "mostly working".
 | `guard policy reload` | W | Explicit hot reload | FR-26 |
 | `guard log [--session --from --to --decision --rule --kind] [--json]` | R | Query the audit log | FR-21, S-07 |
 | `guard log verify [--json]` | R | Chain verification. **Non-zero exit on a break** | FR-20 |
+| `guard explain <actionId\|--seq N> [--json]` | R | Why this decision, from the record alone — rule, comparison, provenance | FR-31, S-04, R-01 |
+| `guard replay <actionId\|--seq N> [--policy <version>] [--no-model] [--json]` | R | Re-evaluate the recorded action; report divergence. **Exit 4 on divergence** | FR-32 |
 | `guard log export [--format <fmt>]` | R | Structured export | FR-22, S-14 |
 | `guard dry-run <command…>` | W | Run a session with enforcement off, logging on | FR-16, S-10 |
 | `guard allow-once <actionId> --reason <text>` | W | Resolve a pending `ask` | FR-25, S-15 |
 | `guard audit view` | R | Read-only TUI viewer | S-24 |
 
 **Exit codes**, uniform and scriptable: `0` allow/success · `1` operational error · `2` policy invalid
-· `3` denied. The split between `2` and `3` is what lets CI distinguish "your policy is broken" from
-"your policy worked and said no" — conflating them would make a CI failure ambiguous in exactly the
-case a developer most needs it to be clear.
+· `3` denied · `4` **replay divergence** (`guard replay` only). The split between `2` and `3` is what
+lets CI distinguish "your policy is broken" from "your policy worked and said no" — conflating them
+would make a CI failure ambiguous in exactly the case a developer most needs it to be clear. `4` is
+separate for the same reason: a divergence is neither an operational failure nor a denial, and a CI job
+that asserts determinism over recorded history needs to distinguish "this build decides differently"
+from "this build is broken".
 
 ### 4.1 Machine output is a contract
 
@@ -317,12 +382,21 @@ below needs a new code added here by review, not an ad-hoc string — because S-
 | `ENGINE_UNREACHABLE` | Adapter could not reach the daemon | **deny** (fail-closed) | `true` |
 | `CONFINEMENT_UNAVAILABLE` | OS primitive missing or unsupported platform | refuse to start | `false` |
 | `REMOVAL_INCOMPLETE` | An adapter could not be de-registered (§4.2) | abort, daemon left running | `true` |
+| `RECORD_NOT_FOUND` | No audit record for the given `actionId`/`seq` (`explain`, `replay`) | reject the query; enforcement unaffected | `false` |
+| `TRACE_UNAVAILABLE` | The record carries no trace, or a `traceVersion` this build cannot read | reject the query, naming the version | `false` |
+| `POLICY_VERSION_UNAVAILABLE` | `replay` was asked for a policy version no longer on disk | reject the replay, naming the version | `false` |
 | `INVALID_REQUEST` | Malformed RPC, unknown method, or a read-only caller invoking a `W` method | reject | `false` |
 
 **Every code whose "Decision" column says deny is a path to the pipeline's initial value, not a branch
 that chooses deny** — which is the whole of [ADR-009](../05-adr/009-fail-closed-default.md). Note
 `AUDIT_WRITE_FAILED`: if the record cannot be made durable, the decision is not returned, because
 returning an allow whose record does not exist would break FR-19 in the one case where it matters.
+
+**A replay divergence is deliberately not in this catalogue.** It is a *result*
+(`ReplayResult.outcome`, §3.3) with an attribution field, because a divergence after a policy edit is
+the expected and correct answer. Encoding it as an error would force callers to treat a normal
+observation as a failure, and would make the one divergence that *is* a defect — `unexplained` — look
+like all the others.
 
 `retryable: true` means *the same action may succeed later without any change to the policy* — it is a
 hint to the agent (S-04), never a licence for the adapter to retry automatically. An adapter that
@@ -390,8 +464,18 @@ load with `POLICY_CONFLICT`, naming both rule ids. The alternative — picking o
 policy decide differently across versions, platforms, or hash-map iteration orders, and the audit log
 would faithfully record an arbitrary choice as though it were intended.
 
-The resolver is implemented **once** and shared by the daemon, `policy.simulate` and `policy.diff`, so
-a simulation cannot disagree with enforcement. It is on the **never-mocked** list
+### 6.4 The resolver reports its own comparisons
+
+The resolver returns, alongside the winner, **one `Elimination` entry per losing candidate naming the
+key that decided it** ([`data-model.md`](data-model.md) §5.5). This is a return value, not a logging
+side-effect: an eliminated candidate that the resolver cannot attribute to a key would be a bug in the
+totality property it is already property-tested for, so producing the attribution costs a field, not a
+second traversal. Without it, key 1's deliberate consequence — a model deny beating a deterministic
+allow (§6.1) — would be invisible in evidence, and the behaviour the design most expects to be
+questioned would be the one the product could not account for.
+
+The resolver is implemented **once** and shared by the daemon, `policy.simulate`, `policy.diff` and
+`decision.replay`, so a simulation, a replay and enforcement cannot disagree. It is on the **never-mocked** list
 ([`../04-solution-design/testing-strategy.md`](../04-solution-design/testing-strategy.md) §3) and is
 property-tested for totality, antisymmetry and transitivity over generated rule sets.
 
@@ -407,6 +491,7 @@ the contract is written as a boundary, not as an integration.
 interface LocalModelRuntime {
   readonly id: string;                      // runtime identity, not model identity (A-2)
   capabilities(): RuntimeCapabilities;      // checked at startup, §7.2
+  identity(): RuntimeIdentity;              // provenance, §7.6 — a runtime that cannot answer is rejected
   evaluate(req: IntentEvalRequest): Promise<IntentEvalOutput>;
   warm(): Promise<void>;
   shutdown(): Promise<void>;
@@ -416,6 +501,14 @@ interface RuntimeCapabilities {
   constrainedDecoding: 'grammar' | 'enum' | 'none';   // 'none' is rejected at startup
   maxConcurrency: number;
   supportsCancellation: boolean;
+}
+
+interface RuntimeIdentity {                 // FR-30 provenance; asserted at startup, stamped per decision
+  runtimeId: string;
+  modelId: string;
+  weightsDigest: string;                    // digest of the loaded weights, not a filename
+  promptTemplateId: string;                 // engine-owned template, versioned with the engine
+  grammarVersion: string;                   // the decoding constraint of §7.1
 }
 
 interface IntentEvalRequest {
@@ -495,6 +588,19 @@ runtime is exercised only in the accuracy and performance gates. The stub implem
 is subject to the same startup conformance probe, so it cannot drift into accepting outputs the real
 boundary would reject.
 
+### 7.6 Identity is a startup requirement, not a nice-to-have
+
+`identity()` must return a stable `weightsDigest` for the weights actually loaded, and the daemon
+**refuses to start** if it cannot — the same posture as §7.2. The reason is narrow and practical: a
+decision whose model cannot be named is a decision whose later divergence cannot be attributed
+([ADR-012](../05-adr/012-decision-trace.md) item 4), and "unknown model" propagating into evidence
+would quietly degrade every record written after a runtime upgrade. The digest is computed once at load
+and stamped onto each decision's provenance; it is **not** recomputed per action, so it costs nothing on
+the hot path.
+
+A runtime swap therefore changes provenance for every subsequent record, which is exactly what makes
+`guard replay` able to say "the model moved" instead of "something moved".
+
 ---
 
 ## 8. `CliAdapter` — the contract written before either adapter
@@ -551,8 +657,10 @@ or the contract was wrong, and both outcomes are useful.
 | Rule ids | Author-owned; the engine never rewrites one. A changed id is a changed rule in the audit log |
 | `ActionKind` | Adding a kind is a **breaking change for every adapter** by design ([`data-model.md`](data-model.md) §2.1) |
 | RPC methods | Add only; `Policy.apiVersion` gates policy-format changes, and an unknown value is rejected rather than coerced |
-| Audit record schema | Add optional fields only. The canonical encoding distinguishes absent from null, so adding a field does not alter existing hashes |
-| CLI exit codes | Frozen. CI depends on `2` vs `3` |
+| Audit record schema | Add optional fields only. The canonical encoding distinguishes absent from null, so adding a field does not alter existing hashes. **`trace` and `provenance` are the exception and must ship in the first release**: they are *required* on a decision record, so introducing them later would split the log into explainable and unexplainable eras, permanently ([ADR-012](../05-adr/012-decision-trace.md) consequence 4) |
+| `DecisionTrace.traceVersion` | Bumped **only by an ADR**, and a reader that meets a version it does not know reports `TRACE_UNAVAILABLE` naming the version rather than partially parsing. `explain` must keep reading every version this product has ever written, because the log outlives the build |
+| `TraceStep.stage` values | Add only. A removed stage would make old records unexplainable; a renamed one would silently reclassify history |
+| CLI exit codes | Frozen. CI depends on `2` vs `3`, and on `4` for the determinism job |
 | `--json` field names | Add only; removals need a major version |
 
 Under A-1 the adapter and the engine ship in one binary, so RPC skew cannot occur in practice; the

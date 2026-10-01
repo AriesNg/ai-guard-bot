@@ -88,10 +88,12 @@ in code:
 | # | Item | Sprint |
 |---|---|---|
 | B-1 | Audit-store benchmark spike | S-1 |
-| B-2 | The remaining thirteen `GuardError` codes becoming constructible | each owning sprint |
+| B-2 | The remaining fifteen `GuardError` codes becoming constructible | each owning sprint |
 | B-3 | Policy fixtures for `mcp.*` server-identity matching | S-5 |
 | B-4 | Performance gate as a CI stage | S-1 |
 | B-5 | The default policy `guard policy init` writes | pre-release |
+| B-6 | `TraceBuilder`, `ProvenanceStamp`, the trace inside the audit record | S-1, S-2 |
+| B-7 | `guard explain` / `guard replay` and the determinism gate | S-2 |
 
 ---
 **Prerequisite**: Phases 1–6 approved, at least for the scope of the sprint being started. For Sprint 1

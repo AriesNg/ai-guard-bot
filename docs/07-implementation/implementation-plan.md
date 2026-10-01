@@ -89,10 +89,10 @@ Per-sprint plans (`sprint-NNN-plan.md`) carry the four fields per task plus a ru
 | S0-T3 | `Action`, `ActionKind` (all eleven), the payload union, `AbsolutePath` newtype with its validating constructor | [`data-model.md`](../03-system-design/data-model.md) §2 |
 | S0-T4 | Path/argv/URL normalisation + its bypass test set (`../`, `~`, symlink, case, punycode, `sh -c`) | [`data-model.md`](../03-system-design/data-model.md) §2.3 |
 | S0-T5 | Policy schema, total validation, the seven load-time checks, content-hash versioning | [`data-model.md`](../03-system-design/data-model.md) §3 |
-| S0-T6 | **Precedence resolver + specificity index**, property-tested for totality, antisymmetry, transitivity; `POLICY_CONFLICT` on an unbreakable tie | [`api-design.md`](../03-system-design/api-design.md) §6 |
+| S0-T6 | **Precedence resolver + specificity index**, property-tested for totality, antisymmetry, transitivity; `POLICY_CONFLICT` on an unbreakable tie; **the resolver returns one `Elimination` per loser naming the key that decided it** — a return value, not a log line | [`api-design.md`](../03-system-design/api-design.md) §6, §6.4 |
 | S0-T7 | `GuardError` closed catalogue, with an exhaustiveness test diffing the enum against the §5 table | [`api-design.md`](../03-system-design/api-design.md) §5 |
 | S0-T8 | `guard policy validate` with exit codes `0`/`1`/`2`, `--json`, and colour-independent output | [`api-design.md`](../03-system-design/api-design.md) §4, §4.1 |
-| S0-T9 | `validate --explain` — precedence order and computed specificity, readable **without a daemon**. Added so S0-T6 is observable at H-2; a CLI-surface addition proposed, not taken ([`sprint-001-plan.md`](sprint-001-plan.md) §7) | [`api-design.md`](../03-system-design/api-design.md) §6 |
+| S0-T9 | `validate --explain` — precedence order and computed specificity, readable **without a daemon**. Added so S0-T6 is observable at H-2; a CLI-surface addition proposed, not taken ([`sprint-001-plan.md`](sprint-001-plan.md) §7). Distinct from `guard explain`, which explains a *recorded decision* rather than a policy's shape | [`api-design.md`](../03-system-design/api-design.md) §6 |
 | S0-T10 | One task-runner entry point shared by CI and developers; the `package.json` disposition settled under Q-09 | [`testing-strategy.md`](../04-solution-design/testing-strategy.md) §6 |
 
 **Gate on exit: H-2.** Nothing is mocked here that §3 of the testing strategy forbids — the precedence
@@ -120,9 +120,19 @@ command line. A developer can read their own policy back.*
 | S1-T6 | **Audit-store benchmark spike**: candidates measured against P95 < 5 ms / P99 < 15 ms with fsync on, APFS + ext4 on real disks | [`data-model.md`](../03-system-design/data-model.md) §6.1 |
 | S1-T7 | `DecisionCache` with its key, the never-cached cases, per-session scope | [`data-model.md`](../03-system-design/data-model.md) §5.4 |
 | S1-T8 | `Confinement` **validating constructor** subtracting the engine's reserved path set; property test over generated policies | [`security.md`](../03-system-design/security.md) §4.2 |
+| S1-T9 | **`EvaluatorResult` returns `step` and `candidates`** — every evaluator reports what it considered as part of its return type, so an untraced evaluator does not compile | [`component-design.md`](../04-solution-design/component-design.md) §2.3 |
+| S1-T10 | **`TraceBuilder`**: accumulates steps and candidates inside the fold, owns the caps and truncation-by-rule, sets `truncated` and `dropped`; the no-content rule enforced by construction — the builder has no API that accepts a value | [`data-model.md`](../03-system-design/data-model.md) §5.5 |
+| S1-T11 | **`ProvenanceStamp`**: assembled at startup and after any policy or runtime change; `LocalModelRuntime::identity()` and the refusal to start without a stable `weightsDigest` | [`api-design.md`](../03-system-design/api-design.md) §7.6 |
+| S1-T12 | Cache hit emits a `cache` trace step citing the reused `actionId`; the hit **copies** the original `evaluator` value rather than inventing a `'cache'` one | [`state-management.md`](../04-solution-design/state-management.md) §A.3 |
 
-**CI gate turned on: performance** (reference workload recorded, P95 regression > 10 % fails).
+**CI gate turned on: performance** (reference workload recorded, P95 regression > 10 % fails) — including
+the trace-overhead rows, measured from the first sprint that produces a trace rather than retrofitted.
 **Gate on exit: H-3.**
+
+S1-T9 through S1-T12 are in this sprint and not a later one for the reason given in
+[ADR-012](../05-adr/012-decision-trace.md): a decision record written without a trace can never acquire
+one. If the first decision this product makes is untraced, that gap is permanent in the log — so the
+trace ships with the pipeline, not after it.
 
 ### S-2 — Evidence
 
@@ -136,8 +146,14 @@ command line. A developer can read their own policy back.*
 | S2-T4 | `AuditQuery` + the five FR-21 indexes; cursor paging on `seq` | [`data-model.md`](../03-system-design/data-model.md) §6.2 |
 | S2-T5 | `audit.query` / `verify` / `stream` / `export`; `guard log`, `log verify`, `log export` with `--json` | [`api-design.md`](../03-system-design/api-design.md) §4 |
 | S2-T6 | `ask.resolve` + `guard allow-once`, override records | FR-25 |
+| S2-T7 | **The record carries `trace` + `provenance` inside the hash**: nested canonical encoding (arrays in produced order, never sorted; empty ≠ absent), a `decision` record without a trace rejected as malformed, cross-OS byte-equality test | [`data-model.md`](../03-system-design/data-model.md) §5.1, §5.2 |
+| S2-T8 | **`decision.explain` + `guard explain`**: renders verdict, path, comparison and provenance **from the record alone** — no evaluation, no policy read; every historical `traceVersion` renders, unknown version → `TRACE_UNAVAILABLE` | [`api-design.md`](../03-system-design/api-design.md) §4 |
+| S2-T9 | **`decision.replay` + `guard replay`**: same pipeline type with the audit and cache writers disabled; `identical` / `divergent` / `unreplayable`; divergence attribution; **exit code `4`** on divergence; `--policy`, `--no-model` | [`api-design.md`](../03-system-design/api-design.md) §4, §5 |
 
-**CI gate turned on: adversarial — audit-tampering cases** (edit, truncate, reorder, forge a terminal record).
+**CI gates turned on: adversarial — audit-tampering cases** (edit, truncate, reorder, forge a terminal
+record) **and trace-tampering cases** (strip a trace and re-hash, rewrite an eliminating key, reorder
+candidates, forge `truncated: false`), plus the **determinism gate** over the sprint's own recorded
+history — the corpus it starts is append-only and retained permanently from here on.
 **Gate on exit: H-4.**
 
 ### S-3 — First interception, and the ability to walk away from it
@@ -217,7 +233,7 @@ it, the gate cannot be *met* without it.
 | S7-T2 | Read-only TUI: keyboard-only, the view inventory | [`routing.md`](../04-solution-design/routing.md) §3 |
 | S7-T3 | `guard dry-run`; `mode` in every record | FR-16 |
 | S7-T4 | The seven terminal/TUI accessibility checks; 80×24 and 120×40 golden grids | [`testing-strategy.md`](../04-solution-design/testing-strategy.md) §1a |
-| S7-T5 | The ten critical E2E journeys, macOS + Linux × both adapters | [`testing-strategy.md`](../04-solution-design/testing-strategy.md) §5 |
+| S7-T5 | The fourteen critical E2E journeys, macOS + Linux × both adapters | [`testing-strategy.md`](../04-solution-design/testing-strategy.md) §5 |
 
 **CI gate turned on: accessibility (blocking).**
 **Gate on exit: H-11.**
@@ -242,13 +258,18 @@ it, the gate cannot be *met* without it.
 Human attention is the scarcest resource on an intermittent side project, so it must not be spent on
 anything a machine can assert. CI owns, blocking, on every change:
 
-lint + format → typecheck → unit + property → integration → **accuracy ∥ adversarial** → performance →
-E2E (macOS + Linux × both adapters) → accessibility → build.
+lint + format → typecheck → unit + property → integration → **accuracy ∥ adversarial ∥ determinism** →
+performance → E2E (macOS + Linux × both adapters) → accessibility → build.
 
 That means **nobody should ever be asked to manually re-check**: latency percentiles, chain integrity,
 coverage-matrix totality, precedence totality, path-normalisation bypasses, teardown crash-safety,
-colour-independence, or whether a boundary claim has a passing test. If a human is checking one of those,
-a gate is missing.
+colour-independence, whether a boundary claim has a passing test, **whether every decision carries a
+trace, whether a trace leaked a value, or whether a past decision still replays identically**. If a
+human is checking one of those, a gate is missing.
+
+The determinism gate is what keeps the trace out of the human gates. Without it, "is the explanation
+right?" would be a recurring manual review of every release's log; with it, the only question left for a
+person is the one in H-4 — whether a correct explanation is also a *legible* one.
 
 ---
 
@@ -264,10 +285,10 @@ and the three recurring reasons a human is genuinely required are —
 
 | # | Gate | When | What the human does | Why CI cannot | Time | Exit condition |
 |---|---|---|---|---|---|---|
-| **H-1** | **Phase 3 approval** | **Now — blocks everything** | Read the four Phase 3 documents; accept or correct the ADR disposition table; **answer or explicitly defer Q-01 and Q-09**; accept or correct assumptions A-1/A-2 | Judgment. Design review has no automated form, and A-1/A-2 are owner decisions this plan refuses to infer | 2–3 h | Phase 3 marked Approved; ADRs 002–011 moved to Accepted; the ADR-011 Sprint-1 wording decision in §1 taken |
+| **H-1** | **Phase 3 approval** | **Now — blocks everything** | Read the four Phase 3 documents; accept or correct the ADR disposition table; **answer or explicitly defer Q-01 and Q-09**; accept or correct assumptions A-1/A-2 | Judgment. Design review has no automated form, and A-1/A-2 are owner decisions this plan refuses to infer | 2–3 h | Phase 3 marked Approved; ADRs 002–012 moved to Accepted; the ADR-011 Sprint-1 wording decision in §1 taken |
 | **H-2** | **Policy language is writable by a human** | End of S-0 | Write five real rules in the policy format **without reading the schema**, then check `guard policy validate`'s errors are actionable | Perception. A schema can be valid and unwritable; S-01's premise is "five lines of English", which only a person attempting it can falsify | 1 h | Five rules written unaided; every validation error says what to do, not just what is wrong |
 | **H-3** | **Denial message quality** | End of S-1 | Read 20 denials, half deliberately false. For each: can you tell *which rule*, *why*, and *what to do instead*? | Perception. CI asserts the rule id is present; only a person can judge whether the sentence is usable mid-task — and S-04/R-01 turn on exactly that | 1 h | Every denial names the rule and a remedy; no denial requires reading the policy file to understand |
-| **H-4** | **Evidence is answerable** | End of S-2 | Pick three questions a developer would really ask ("what touched my `.env` yesterday?") and answer them with `guard log` only | Judgment. CI tests that the query returns rows; it cannot tell whether the rows answer a human's question | 45 min | All three answered without a second tool and without reading raw segment files |
+| **H-4** | **Evidence is answerable** | End of S-2 | Pick three questions a developer would really ask ("what touched my `.env` yesterday?") and answer them with `guard log` only. **Then take one denial you disagree with and run `guard explain` on it**: does the rendered trace tell you which rule won, what else matched, and why the others lost — without opening the policy file? | Judgment. CI tests that the query returns rows and that the trace contains its fields; it cannot tell whether the rows answer a human's question, or whether a list of eliminations reads as an *explanation* rather than a dump | 1 h | All three answered without a second tool and without reading raw segment files; the explanation of a contested denial is understood without reference to the policy, and `guard replay` on it exits `0` |
 | **H-5** | **First real-session dogfood, dry-run** | **End of S-3, before any enforcing use** | Run a genuine hour of work with the Claude Code adapter in `guard dry-run`; read every decision afterwards | Judgment on live distribution. The corpus contains what we imagined; a real session contains what actually happens | 1–2 h | Zero would-have-denied actions that the human judges reasonable; any found becomes a corpus entry |
 | **H-6** | **Uninstall on a real machine** | End of S-3 | On a machine you care about: install, hand-edit the host config, uninstall. Then `--agent`, a rerun, `--print`, and `--purge`. **Confirm the host CLI still runs.** | Judgment. CI proves the ordering invariant; only a person can confirm their own CLI is undamaged and their config file came back with their formatting intact — and FR-27 exists because getting this wrong converts a lost user into a hostile one | 1 h | Host CLI works in every variant; exit `0` from each broken state; `log verify` reports `closed-by-removal` |
 | **H-7** | **Boundary-claim honesty review** | End of S-4 | Read §2 and §3 of [`security.md`](../03-system-design/security.md) **against the adversarial gate's actual results**. Delete any claim not backed by a passing test | Judgment, and the highest-stakes kind here. CI checks the diff mechanically; a human must judge whether the *prose* overstates what the test proves — ADR-008's rule is "delete, don't soften", and only a person can tell softening from accuracy | 1–2 h | Every `enforces` entry has a named passing test; §3's nine items read as plainly as written; **no Windows claim exists anywhere** |
