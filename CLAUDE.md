@@ -30,13 +30,18 @@ There are none yet, and the toolchain is **not** the one `package.json` implies.
 core is proposed as Rust (ADR-002), the UI is a terminal UI, and Q-09 asks whether a Node runtime
 ships at all — so `package.json`'s empty npm scripts are scaffold residue, not a reserved plan.
 
-`docs/07-implementation/sprint-001-plan.md` is also scaffold boilerplate: it describes auth, a
-landing page, and a dashboard shell, which belong to no part of this product. **It binds nothing.**
-Phase 7's real Sprint 1 is written after Phase 3 is approved, and ADR-011 names what it must contain
-(the `CliAdapter` contract, both adapters, the two-OS CI matrix, the accuracy gate, and the shipped
-default policy).
+`docs/07-implementation/sprint-001-plan.md` **is now the real Sprint 1** (S-0 Foundations): ten tasks,
+each with an acceptance condition and a verification command, exiting at gate H-2. It replaced the
+scaffold boilerplate that used to sit there. It is **Draft and not started** — blocked on H-1 (Phase 3
+approval) — so the commands it names (`just test`, `guard policy validate`) describe what S1-01/S1-08
+and S1-10 will create. **They do not exist yet.**
 
-Until that sprint is written and run, never claim a build/test command exists or invent one.
+Until Sprint 1 is run, never claim a build/test command exists or invent one.
+
+ADR-011's "the team must now" list (the `CliAdapter` contract, both adapters, the two-OS CI matrix,
+the accuracy gate, the shipped default policy, clean removal) is read by `implementation-plan.md` §1
+as the **v1 release blocking set**, sequenced across S-1 … S-6 rather than crammed into Sprint 1 —
+an ADR-011 wording amendment the owner decides at H-1. Nothing in scope changes either way.
 
 ## The phase gate
 
@@ -89,6 +94,36 @@ From `.ai/instructions.md` and `.ai/rules/general.md`, enforced across every pha
   retrofitted.
 - Propose before coding anything architectural; offer 2–3 options with a recommendation when
   uncertain rather than guessing.
+
+## Sprint tasks must be testable in their own sprint
+
+Canonical statement in `docs/07-implementation/README.md` (§Testability contract) and
+`implementation-plan.md` §2.1. It applies to every sprint plan generated from here on.
+
+A task may not enter a sprint plan unless it carries all four of:
+
+| Field | Requirement |
+|---|---|
+| **Deliverable** | The artefact that exists afterwards — a module, a command, a CI stage |
+| **Acceptance** | An observable, **falsifiable** condition. "Implemented" is not one |
+| **Verified by** | The exact command a reviewer runs, plus the test file asserting it in CI |
+| **Traces to** | The design section it implements |
+
+And the hard rule on top: **no task's verification may depend on an artefact from a later sprint.**
+
+Practical consequences when writing or reviewing a sprint plan:
+
+- A task whose check needs something not yet built **moves to the later sprint**. Do not weaken the
+  acceptance condition so it fits where it currently sits.
+- If a sprint's work would be invisible without one, **add the small read-only surface that makes it
+  observable** — and propose that surface rather than taking it (the `--explain` flag in
+  `sprint-001-plan.md` §7 is the worked example).
+- A condition that genuinely cannot be automated becomes a **named human gate** in
+  `implementation-plan.md` §4, with a stated reason CI cannot answer it — judgment, perception, or
+  adversarial creativity. It never becomes a looser test.
+- Every sprint plan ends with a **demo script**: numbered steps, each runnable with only that
+  sprint's output and its predecessors', each with a pass condition.
+- Acceptance conditions are quantified and run on **macOS and Linux** both, per ADR-011.
 
 ## Existing decisions
 
