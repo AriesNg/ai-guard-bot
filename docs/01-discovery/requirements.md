@@ -219,6 +219,11 @@ policy distribution or a team view that a single-user local tool has nowhere to 
   one exists, and SHALL NOT require a fork or patch of the host agent.
 - **FR-09** The system SHALL expose the same policy engine to CLIs lacking such an interface via
   an MCP proxy and/or process-level interception.
+  **v1 satisfies the MCP-proxy half only.** Process-level interception is undesigned for v1 and
+  deferred to [ADR-012](../05-adr/012-supervised-exec-adapter.md) (post-v1, Linux-only, blocked on
+  Q-10). The gap this leaves is explicit: a host CLI offering **neither** a hook interface **nor**
+  MCP traffic has no interception point, so every action class is `unavailable` and FR-10 denies all
+  of them — such a host is **unservable in v1**, not partially served.
 - **FR-10** The system SHALL degrade to `deny` when interception coverage for a given action
   class cannot be guaranteed, and SHALL report that gap at startup rather than silently.
 - **FR-28** The system SHALL intercept and evaluate **every MCP request class an agent can issue**,
@@ -573,15 +578,18 @@ Per `.ai/rules/review-criteria.md`:
       [ADR-011](../05-adr/011-v1-scope-envelope.md).
 
 **Blocking for approval**: **Q-01** (which local model) and **Q-09** (single-language Rust) below.
-Q-02 … Q-08 were answered on 2026-10-02 and no longer block.
+Q-02 … Q-08 were answered on 2026-10-02 and no longer block. **Q-10** is open but **not** blocking —
+it gates [ADR-012](../05-adr/012-supervised-exec-adapter.md) alone, which is post-v1.
 
 ---
 
 ## Open Questions
 
-Carried from `.ai/context/project-brief.md` and extended. **Seven of the eight were answered by the
-product owner on 2026-10-02**, in a requirements-confirmation session recorded as
-[ADR-011](../05-adr/011-v1-scope-envelope.md). One remains open and blocks Discovery approval.
+Carried from `.ai/context/project-brief.md` and extended. **Seven of the original eight were
+answered by the product owner on 2026-10-02**, in a requirements-confirmation session recorded as
+[ADR-011](../05-adr/011-v1-scope-envelope.md). Two of those eight remain open and block Discovery
+approval. **Q-10 was raised in design review on 2026-10-02 and is open but non-blocking** — it gates
+only [ADR-012](../05-adr/012-supervised-exec-adapter.md), which is post-v1.
 
 ### Open
 
@@ -589,6 +597,7 @@ product owner on 2026-10-02**, in a requirements-confirmation session recorded a
 |---|---|---|
 | **Q-01** | **Local model choice.** The brief names "laya" / "jev". The owner confirms **"laya" is a specific model**, not a Llama-class placeholder — the exact name, and where it comes from (an Ollama tag, a Hugging Face repo, something internal), is still needed. | Sets the memory floor against the < 5 GB budget and the P95 model-path latency target, and makes FR-11's accuracy gate measurable. [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) stands as written — the runtime is pluggable — but its numbers are unverifiable until the model is named. |
 | **Q-09** | **Single-language Rust?** Now that Q-06 answered with a TUI, nothing consumes the TypeScript half of [ADR-002](../05-adr/002-enforcement-core-language.md). Recommendation: build the TUI in-process in Rust, ship one binary, delete the schema-codegen step. | Raised *by* the answers rather than carried from the brief. Decides whether a Node runtime ships inside a security tool, and whether S-09's one-command install is one binary. |
+| **Q-10** | **Is a Linux-only capability admissible?** FR-09 offers "an MCP proxy **and/or** process-level interception", but the only mechanism that can review an action pre-execution at the kernel's own interface is `seccomp` user notification on Linux; macOS's equivalent (Endpoint Security `AUTH` events) needs an Apple-granted entitlement and answers under a kernel deadline. So the second half of FR-09 is buildable on one v1 platform and not the other. Recommendation: **no for v1**, defensible post-v1 as matrix-declared defence in depth with the macOS row empty. | **Does not block approval of this document.** It gates [ADR-012](../05-adr/012-supervised-exec-adapter.md) only, and tests whether ADR-007 §6's "do not advertise support on an incomplete matrix" rule tolerates a platform-asymmetric capability at all. A "no" closes ADR-012 as Rejected. |
 
 ### Answered 2026-10-02
 
@@ -610,5 +619,6 @@ product owner on 2026-10-02**, in a requirements-confirmation session recorded a
 - [`user-personas.md`](user-personas.md) — persona detail
 - [`../05-adr/011-v1-scope-envelope.md`](../05-adr/011-v1-scope-envelope.md) — the confirmation session of 2026-10-02 that answered Q-02 … Q-08, and the consequences of each answer
 - [`../05-adr/010-supersede-adr-001-no-web-server-ui.md`](../05-adr/010-supersede-adr-001-no-web-server-ui.md) — supersedes ADR-001; the UI constraints that make a TUI the answer to Q-06
-- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-011 (Proposed), which answer the architectural questions these requirements raise; the index's "Blocked on human input" table now lists only Q-01 and Q-09
+- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-012 (Proposed), which answer the architectural questions these requirements raise; the index's "Blocked on human input" table lists Q-01 and Q-09 as approval blockers, plus Q-10 against ADR-012 as non-blocking
+- [`../05-adr/012-supervised-exec-adapter.md`](../05-adr/012-supervised-exec-adapter.md) — why FR-09's "process-level interception" clause is undesigned in v1, and the gap that leaves: a host CLI with neither hooks nor MCP traffic has no interception point, so under FR-10 every action it attempts is denied
 - [`../04-solution-design/`](../04-solution-design/) — Phase 4 documents, drafted ahead of the Phase 3 gate (see the note at the top of each)

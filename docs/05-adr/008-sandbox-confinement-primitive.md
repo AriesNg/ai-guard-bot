@@ -12,6 +12,18 @@ The primitive is now fixed rather than conditional:
 | **Linux** | Landlock (filesystem) + seccomp-bpf (syscalls) + network namespace | Supported, tested |
 | **Windows** | AppContainer would be the candidate | **Not supported, no boundary claim published** — it cannot be tested (ADR-011), and item 3 below deletes untested claims |
 
+The primitives above are **spawn-time** confinement: an allowlist is fixed when the approved action
+is executed. They are not per-action kernel review. A separate mechanism class could hold each
+action and ask the guard about it, and it is tabulated here because the asymmetry decides its fate:
+
+| Capability | macOS | Linux | v1 status |
+|---|---|---|---|
+| **Pre-execution supervision** — hold an action, ask userspace, allow/deny | Endpoint Security framework `AUTH` events | `seccomp` user notification (`SECCOMP_USER_NOTIF`) | **Not pursued.** The macOS path needs a notarized system extension plus an Apple-granted entitlement and answers under a kernel deadline; the Linux path ships freely. Building only the Linux half breaks ADR-011's platform parity — deferred to [ADR-012](012-supervised-exec-adapter.md) |
+
+Pre-execution supervision is an **interception point**, not a confinement boundary, so it belongs to
+the adapter layer ([ADR-007](007-cli-integration-strategy.md)) rather than to this ADR. The
+distinction matters because the word "sandbox" invites a reader to assume the stronger property.
+
 This follows from Q-03 answering **erring agent**: confinement by allowlist is sufficient, and the
 heavier container/microVM boundaries stay rejected. Prompt-injection-driven escape is **not** claimed
 to be prevented, and the threat model must say so.
@@ -135,6 +147,10 @@ Trade-offs accepted:
    own it.
 5. Assert the engine-files invariant in a test that enumerates policy shapes attempting to include
    them.
+6. **State in the published threat model that confinement is spawn-time allowlisting, not per-action
+   kernel review** — in those terms. A reader who meets the word "sandbox" will otherwise infer the
+   stronger property, and the absence of a claim is not a denial of one (the same reasoning as item
+   12's prompt-injection limitation).
 
 ## Rejected Alternatives
 
@@ -143,6 +159,21 @@ Trade-offs accepted:
   a direct syscall, or an unset environment variable. Its real danger is that it *looks* like
   confinement, which under R-04's logic is worse than having none. Permissible only as defence in
   depth, never as a claim.
+- **Kernel-supervised interception as the boundary** — a real supervisor holding each action at the
+  kernel's own interface (`SECCOMP_USER_NOTIF` on Linux, Endpoint Security `AUTH` events on macOS)
+  and deciding before it proceeds. **This is a different and substantially stronger idea than the
+  interposition tricks above, and it is rejected for different reasons.** It is not unsound: the
+  mechanisms are kernel-enforced, not bypassable by a static binary, and on Linux they ship with no
+  vendor permission. It is rejected here because (a) the macOS path requires a notarized system
+  extension plus the `com.apple.developer.endpoint-security.client` entitlement, which Apple grants
+  per organization on review, so a single-user side project ([ADR-011](011-v1-scope-envelope.md))
+  cannot assume it and item 3 would then delete any claim resting on it; (b) macOS `AUTH` events must
+  be answered inside a kernel-imposed window or the default action is applied, which a local model in
+  the decision path cannot guarantee; (c) a Linux-only implementation breaks ADR-011's
+  both-platforms-tested parity. Pursued — if at all — as an **interception point** in
+  [ADR-012](012-supervised-exec-adapter.md), post-v1 and Linux-only, and never as part of a
+  `BoundaryDescription`. Do not read this rejection as the one above: that one says *it only looks
+  like confinement*; this one says *it is confinement we cannot ship on both platforms*.
 - **A container (Docker-class) per session.** Strong, familiar, cross-platform-ish. Rejected for
   v1 as the default: it requires a container runtime the developer may not have (breaking the
   5-minute install, S-09), and mounting the developer's real repo, credentials, and toolchain into
@@ -169,6 +200,8 @@ Trade-offs accepted:
 **Related**: [ADR-011](011-v1-scope-envelope.md) (answers Q-02 and Q-03) ·
 [ADR-002](002-enforcement-core-language.md) ·
 [ADR-007](007-cli-integration-strategy.md) · [ADR-009](009-fail-closed-default.md) ·
+[ADR-012](012-supervised-exec-adapter.md) (pre-execution supervision as an interception point, kept
+outside this boundary) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-17, FR-18, R-02, R-07,
 Q-02, Q-03 ·
 [`../04-solution-design/component-design.md`](../04-solution-design/component-design.md) §2.5
