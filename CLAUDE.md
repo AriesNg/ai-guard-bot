@@ -77,6 +77,65 @@ freely:
 - `infrastructure/` — generate; the human tests in non-prod first.
 - `tests/` — written alongside the implementation, never deferred.
 
+## Worktrees carry an id
+
+Every worktree exists to land one identified work item, so that a branch, its commits and its PR
+are all traceable back to the document, decision or task that justified them. Name it
+`.claude/worktrees/<id>-<slug>` — git then creates the branch `worktree-<id>-<slug>`.
+
+The id is lowercase and comes from a vocabulary that already exists in the repo:
+
+| Id form | What it names | Where it is defined |
+|---|---|---|
+| `adr-0NN` | an ADR | `docs/05-adr/0NN-*.md`, indexed in `docs/05-adr/README.md` |
+| `q-NN` | an open question | `.ai/context/project-brief.md`, tracked per ADR in `docs/05-adr/README.md` |
+| `fr-NN`, `nfr-NN`, `r-NN`, `s-NN` | a requirement, non-functional requirement, risk or story | `docs/01-discovery/requirements.md` |
+| `sprint-N` | a sprint (S-0 … S-7, or `pre-release`) | `docs/07-implementation/implementation-plan.md` |
+| `phase-N` | a whole phase's document set | `docs/0N-*/README.md` |
+| `meta` | the process itself — `CLAUDE.md`, `.claude/`, tooling; no numbered id exists for these | this file |
+
+Rules:
+
+- **One worktree, one id.** If the work turns out to span a second id, open a second worktree
+  rather than widening the first.
+- The worktree's **first commit body names the id and the file(s) it maps to**, and the PR
+  description opens with the same id. A reader must never have to guess which decision a branch
+  belongs to.
+- If no id exists yet, **create the record first** — the ADR, the requirement, the sprint entry —
+  then name the worktree after it. `meta` is the only exemption, and only for process/tooling
+  files that live outside `docs/`.
+- Do not rename or reuse a worktree for unrelated work; `.claude/worktrees/` is a record of what
+  was attempted, not scratch space.
+
+## Landing work
+
+The default branch is `master` (this repo has no separate `main`). The flow is:
+
+1. Commit in the worktree.
+2. Push the branch to `origin`.
+3. Open a PR with `gh pr create` — title and body opening with the worktree's id.
+4. **Merge it into `master` directly**, without waiting, once the PR is green.
+
+Do not leave a PR open hoping for review: the normal end state is *merged*. Report the PR and the
+merge together.
+
+**Stop before step 4 and ask for the human's approval** when the change is one the process reserves
+to them. That is the case when it:
+
+- changes a `**Status**` line — anything moving a document to **Approved**, or marking one
+  **Superseded**;
+- answers an open question (Q-01, Q-09, Q-02 … Q-06) or amends a decision recorded in an ADR,
+  including ADR-011's v1 scope envelope;
+- touches `.ai/` (which should not happen — propose in chat instead);
+- lands something behind a human quality gate in `docs/07-implementation/implementation-plan.md`
+  §4, or a release blocker (the accuracy gate, the shipped default policy);
+- publishes a boundary or platform claim — e.g. anything that would imply Windows support, or
+  describe injection-driven escape as prevented.
+
+In those cases push the branch and open the PR anyway, say plainly which clause triggered the hold,
+and leave the merge to the human. Never force-push, never merge `master` into a worktree branch to
+"fix" it, and never delete a branch that was not merged.
+
 ## Standing constraints on generated work
 
 From `.ai/instructions.md` and `.ai/rules/general.md`, enforced across every phase:
