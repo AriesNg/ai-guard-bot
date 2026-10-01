@@ -30,13 +30,18 @@ There are none yet, and the toolchain is **not** the one `package.json` implies.
 core is proposed as Rust (ADR-002), the UI is a terminal UI, and Q-09 asks whether a Node runtime
 ships at all — so `package.json`'s empty npm scripts are scaffold residue, not a reserved plan.
 
-`docs/07-implementation/sprint-001-plan.md` is also scaffold boilerplate: it describes auth, a
-landing page, and a dashboard shell, which belong to no part of this product. **It binds nothing.**
-Phase 7's real Sprint 1 is written after Phase 3 is approved, and ADR-011 names what it must contain
-(the `CliAdapter` contract, both adapters, the two-OS CI matrix, the accuracy gate, and the shipped
-default policy).
+`docs/07-implementation/sprint-001-plan.md` **is now the real Sprint 1** (S-0 Foundations): ten tasks,
+each with an acceptance condition and a verification command, exiting at gate H-2. It replaced the
+scaffold boilerplate that used to sit there. It is **Draft and not started** — blocked on H-1 (Phase 3
+approval) — so the commands it names (`just test`, `guard policy validate`) describe what S1-01/S1-08
+and S1-10 will create. **They do not exist yet.**
 
-Until that sprint is written and run, never claim a build/test command exists or invent one.
+Until Sprint 1 is run, never claim a build/test command exists or invent one.
+
+ADR-011's "the team must now" list (the `CliAdapter` contract, both adapters, the two-OS CI matrix,
+the accuracy gate, the shipped default policy, clean removal) is read by `implementation-plan.md` §1
+as the **v1 release blocking set**, sequenced across S-1 … S-6 rather than crammed into Sprint 1 —
+an ADR-011 wording amendment the owner decides at H-1. Nothing in scope changes either way.
 
 ## The phase gate
 
@@ -77,6 +82,65 @@ freely:
 - `infrastructure/` — generate; the human tests in non-prod first.
 - `tests/` — written alongside the implementation, never deferred.
 
+## Worktrees carry an id
+
+Every worktree exists to land one identified work item, so that a branch, its commits and its PR
+are all traceable back to the document, decision or task that justified them. Name it
+`.claude/worktrees/<id>-<slug>` — git then creates the branch `worktree-<id>-<slug>`.
+
+The id is lowercase and comes from a vocabulary that already exists in the repo:
+
+| Id form | What it names | Where it is defined |
+|---|---|---|
+| `adr-0NN` | an ADR | `docs/05-adr/0NN-*.md`, indexed in `docs/05-adr/README.md` |
+| `q-NN` | an open question | `.ai/context/project-brief.md`, tracked per ADR in `docs/05-adr/README.md` |
+| `fr-NN`, `nfr-NN`, `r-NN`, `s-NN` | a requirement, non-functional requirement, risk or story | `docs/01-discovery/requirements.md` |
+| `sprint-N` | a sprint (S-0 … S-7, or `pre-release`) | `docs/07-implementation/implementation-plan.md` |
+| `phase-N` | a whole phase's document set | `docs/0N-*/README.md` |
+| `meta` | the process itself — `CLAUDE.md`, `.claude/`, tooling; no numbered id exists for these | this file |
+
+Rules:
+
+- **One worktree, one id.** If the work turns out to span a second id, open a second worktree
+  rather than widening the first.
+- The worktree's **first commit body names the id and the file(s) it maps to**, and the PR
+  description opens with the same id. A reader must never have to guess which decision a branch
+  belongs to.
+- If no id exists yet, **create the record first** — the ADR, the requirement, the sprint entry —
+  then name the worktree after it. `meta` is the only exemption, and only for process/tooling
+  files that live outside `docs/`.
+- Do not rename or reuse a worktree for unrelated work; `.claude/worktrees/` is a record of what
+  was attempted, not scratch space.
+
+## Landing work
+
+The default branch is `master` (this repo has no separate `main`). The flow is:
+
+1. Commit in the worktree.
+2. Push the branch to `origin`.
+3. Open a PR with `gh pr create` — title and body opening with the worktree's id.
+4. **Merge it into `master` directly**, without waiting, once the PR is green.
+
+Do not leave a PR open hoping for review: the normal end state is *merged*. Report the PR and the
+merge together.
+
+**Stop before step 4 and ask for the human's approval** when the change is one the process reserves
+to them. That is the case when it:
+
+- changes a `**Status**` line — anything moving a document to **Approved**, or marking one
+  **Superseded**;
+- answers an open question (Q-01, Q-09, Q-02 … Q-06) or amends a decision recorded in an ADR,
+  including ADR-011's v1 scope envelope;
+- touches `.ai/` (which should not happen — propose in chat instead);
+- lands something behind a human quality gate in `docs/07-implementation/implementation-plan.md`
+  §4, or a release blocker (the accuracy gate, the shipped default policy);
+- publishes a boundary or platform claim — e.g. anything that would imply Windows support, or
+  describe injection-driven escape as prevented.
+
+In those cases push the branch and open the PR anyway, say plainly which clause triggered the hold,
+and leave the merge to the human. Never force-push, never merge `master` into a worktree branch to
+"fix" it, and never delete a branch that was not merged.
+
 ## Standing constraints on generated work
 
 From `.ai/instructions.md` and `.ai/rules/general.md`, enforced across every phase:
@@ -89,6 +153,36 @@ From `.ai/instructions.md` and `.ai/rules/general.md`, enforced across every pha
   retrofitted.
 - Propose before coding anything architectural; offer 2–3 options with a recommendation when
   uncertain rather than guessing.
+
+## Sprint tasks must be testable in their own sprint
+
+Canonical statement in `docs/07-implementation/README.md` (§Testability contract) and
+`implementation-plan.md` §2.1. It applies to every sprint plan generated from here on.
+
+A task may not enter a sprint plan unless it carries all four of:
+
+| Field | Requirement |
+|---|---|
+| **Deliverable** | The artefact that exists afterwards — a module, a command, a CI stage |
+| **Acceptance** | An observable, **falsifiable** condition. "Implemented" is not one |
+| **Verified by** | The exact command a reviewer runs, plus the test file asserting it in CI |
+| **Traces to** | The design section it implements |
+
+And the hard rule on top: **no task's verification may depend on an artefact from a later sprint.**
+
+Practical consequences when writing or reviewing a sprint plan:
+
+- A task whose check needs something not yet built **moves to the later sprint**. Do not weaken the
+  acceptance condition so it fits where it currently sits.
+- If a sprint's work would be invisible without one, **add the small read-only surface that makes it
+  observable** — and propose that surface rather than taking it (the `--explain` flag in
+  `sprint-001-plan.md` §7 is the worked example).
+- A condition that genuinely cannot be automated becomes a **named human gate** in
+  `implementation-plan.md` §4, with a stated reason CI cannot answer it — judgment, perception, or
+  adversarial creativity. It never becomes a looser test.
+- Every sprint plan ends with a **demo script**: numbered steps, each runnable with only that
+  sprint's output and its predecessors', each with a pass condition.
+- Acceptance conditions are quantified and run on **macOS and Linux** both, per ADR-011.
 
 ## Existing decisions
 
