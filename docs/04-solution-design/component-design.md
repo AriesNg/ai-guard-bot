@@ -29,7 +29,7 @@ each traceable to a Discovery requirement:
 | A-3 | Transport is **JSON-RPC over a Unix domain socket** with filesystem permissions, not a TCP port. | [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) | Security NFR (agent must not reach the engine), Privacy NFR | Transport swap only; `DecisionService` contract unchanged. |
 | A-4 | Evaluation is a **pipeline of evaluators** in fixed precedence: deterministic → hooks → model, short-circuiting on first decision. | [ADR-004](../05-adr/004-layered-policy-model.md), [ADR-009](../05-adr/009-fail-closed-default.md) | FR-03, FR-11, ≥ 80 % actions resolved without the model | None — this is required by FR-11 regardless. |
 | A-5 | The **audit log** is an append-only, hash-chained local store with a query index; the record is durable before the decision returns. | [ADR-006](../05-adr/006-audit-log-integrity.md) | FR-19–FR-22, "zero decisions unlogged" | Storage engine swap behind `AuditStore`. |
-| A-6 | The **UI surface** (P2) is a separate Next.js app reading the daemon's read-only query API — it is not in the enforcement path. | [ADR-001](../05-adr/001-use-react-and-typescript.md), [ADR-002](../05-adr/002-enforcement-core-language.md) | ADR-001 binding for UI; Q-06 open | If Q-06 says no UI in v1, §3 is deferred wholesale; §1–2 stand. |
+| A-6 | The **UI surface** (P2), *if one exists at all*, reads the daemon's read-only query API and is not in the enforcement path. | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md) (supersedes ADR-001), [ADR-002](../05-adr/002-enforcement-core-language.md) | Q-06 open; no UI stack is decided | §3 below assumed a Next.js server and is **provisional**: ADR-010 forbids a server runtime and a listener, so §3 must be reworked or dropped when Q-06 is answered. §1–2 stand. |
 
 ### Enforcement-core language — now [ADR-002](../05-adr/002-enforcement-core-language.md) (Proposed)
 
@@ -38,7 +38,7 @@ weighed rather than assumed; the conclusion is now filed as ADR-002:
 
 | Option | For | Against |
 |---|---|---|
-| **Rust** *(recommended)* | Adapter process start in single-digit ms, needed for the P95 < 10 ms overhead budget; first-class bindings to OS sandbox primitives (Seatbelt, Landlock, seccomp); single static binary makes one-command install (S-09) trivial; memory floor leaves room under the < 5 GB model budget | Slowest to write; smallest overlap with the ADR-001 TypeScript skill set |
+| **Rust** *(recommended)* | Adapter process start in single-digit ms, needed for the P95 < 10 ms overhead budget; first-class bindings to OS sandbox primitives (Seatbelt, Landlock, seccomp); single static binary makes one-command install (S-09) trivial; memory floor leaves room under the < 5 GB model budget | Slowest to write; smallest overlap with a TypeScript skill set |
 | **Go** | Fast start, easy static binaries, simpler than Rust | Weaker/less direct access to OS confinement APIs; GC pauses are a P99 risk against the 50 ms deterministic budget |
 | **Node + TypeScript** | One language across core and UI; fastest to build; shares types with the Next.js surface | Node process start alone (~40–80 ms) blows the per-action overhead budget unless every adapter is native anyway; OS sandbox integration needs native modules, reintroducing the build complexity Rust would have given outright |
 
@@ -299,9 +299,16 @@ change touches one directory — the containment R-05 needs.
 
 ## 3. UI surface — component tree (P2, gated on Q-06)
 
-Applies only if Q-06 puts a UI in v1. Next.js App Router, RSC by default per ADR-001. The UI
-reads `AuditQuery` and writes only the policy file; **it is never in the enforcement path**, so
-its availability cannot affect a decision.
+> **Provisional — do not build from this section yet.** It was written assuming ADR-001's Next.js
+> server (RSC, Server Actions).
+> [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md) supersedes ADR-001 and forbids any
+> server runtime or listener shipping with the product, and defers the UI stack choice to Q-06. The
+> *component decomposition and accessibility notes below remain useful*; the server/client split and
+> the Server Action write path do not survive and are flagged in place.
+
+Applies only if Q-06 puts a UI in v1. The UI reads `AuditQuery` and, per ADR-010 item 3, is
+**read-only** — policy writes go through the CLI. It is never in the enforcement path, so its
+availability cannot affect a decision.
 
 ```
 AppShell (server)
@@ -333,10 +340,11 @@ AppShell (server)
     └── ActionSimulator (client)         props: { onEvaluate }  — evaluate a hypothetical action
 ```
 
-**Server vs client split**: everything that only renders queried data is a Server Component;
-client components are exactly those with interaction state (filters, expansion, editing). This
-keeps the audit log — potentially a million records — off the client bundle and satisfies
-ADR-001's RSC-by-default consequence.
+**Server vs client split** *(does not survive ADR-010 — retained to record the intent)*: the
+reasoning was that anything only rendering queried data is a Server Component, keeping a
+million-record log off the client bundle. With no server runtime, the equivalent requirement is
+that the client never loads an unbounded result set: pagination and filtering happen in the
+daemon's `audit.query`, not in the browser.
 
 **Accessibility, per component** (Accessibility NFR): `DecisionBadge` pairs an icon and a text
 label with its colour; `DecisionTimeline` is a keyboard-navigable list with roving tabindex, not

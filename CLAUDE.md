@@ -13,10 +13,16 @@ The substance of the repo is the **process contract** in `.ai/` and the **phase-
 tree** in `docs/`. Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before
 doing anything — they define the operating mode that the rest of this file summarizes.
 
-The directory name (`0004-ai-guard-bot`) hints at the intended product, but
-`.ai/context/project-brief.md` is still an unfilled template and `README.md` still says
-`{Project Name}`. **Do not infer the product from the folder name.** If a task requires knowing
-what is being built, ask the human to fill in the project brief first.
+`.ai/context/project-brief.md` is **filled in** and is the authoritative description of the
+product: a local, vendor-agnostic guardrail layer between an AI CLI agent and the machine, which
+intercepts every action, evaluates it against high-level developer-authored rules using
+deterministic matchers plus a locally-run small model, and allows / masks / denies it before
+execution, logging every decision. Read the brief rather than inferring from the folder name.
+
+Six open questions at the end of the brief are still unanswered, four of which block approval:
+Q-02 (target platforms), Q-03 (threat model — an agent that errs vs one actively trying to
+escape), Q-04 (first target CLI), Q-06 (is a UI in scope for v1). Do not invent answers to these;
+where work depends on one, state the assumption explicitly.
 
 ## Commands
 
@@ -80,7 +86,18 @@ From `.ai/instructions.md` and `.ai/rules/general.md`, enforced across every pha
 
 ## Existing decisions
 
-`docs/05-adr/001-use-react-and-typescript.md` is **Accepted**: Next.js 14+ App Router,
-TypeScript, React Server Components by default. Treat this as binding unless a new ADR
-supersedes it — note that the ADR index table in `docs/05-adr/README.md` has not yet been
-updated to list it.
+`docs/05-adr/001-use-react-and-typescript.md` (Next.js 14+ App Router, RSC) was inherited from
+the scaffold and is **superseded by ADR-010**. **It binds nothing** — do not treat Next.js, the
+App Router, or RSC as decided for this project, and do not cite ADR-001 as a constraint.
+
+`docs/05-adr/002` … `010` are **Proposed**, awaiting the human's review: Rust enforcement core
+with a TypeScript UI (002), a local daemon over a Unix socket with **no TCP listener in any
+configuration** (003), layered policy where deterministic rules decide before intent rules (004),
+a pluggable local model runtime (005), a hash-chained single-writer audit log (006), per-CLI
+adapters with a coverage matrix (007), OS-native confinement with no absolute isolation claim
+(008), fail-closed as a default value rather than a branch (009), and no web-server UI (010).
+Read `docs/05-adr/README.md` for the index and the open questions each one is blocked on.
+
+Treat a Proposed ADR as the current design intent, not as settled: Phase 3 accepts or supersedes
+them. Every document under `docs/01-discovery/` and `docs/04-solution-design/` is **Draft**, and
+Phase 4 was drafted ahead of its Phase 3 prerequisite at the product owner's explicit request.

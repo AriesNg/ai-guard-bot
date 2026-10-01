@@ -118,7 +118,14 @@ any state-recovery machinery that could itself restore a stale allow.
 
 ## Part B — UI state (P2, gated on Q-06)
 
-Applies only if Q-06 puts a web UI in v1. Next.js App Router, RSC by default per ADR-001.
+> **Provisional.** Written assuming ADR-001's Next.js server (RSC, Server Actions). ADR-001 is
+> superseded by [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md), which forbids a
+> server runtime or listener shipping with the product and defers the UI stack to Q-06. Where this
+> part says "Server Action", read "an RPC to the daemon over the existing Unix socket" — and note
+> that per ADR-010 item 3 the UI is **read-only**, so the policy-write flows below belong to the
+> CLI. The *state inventory and the loading/error requirements remain valid*.
+
+Applies only if Q-06 puts a UI in v1.
 
 ### B.1 Global state — what, why, tool
 

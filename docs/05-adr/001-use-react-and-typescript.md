@@ -1,6 +1,14 @@
 # ADR-001: Use React + TypeScript with Next.js App Router
 
-**Status**: Accepted
+**Status**: **Superseded by [ADR-010](010-supersede-adr-001-no-web-server-ui.md)** (2026-10-02)
+
+> This ADR was inherited from the project scaffold and predates
+> `.ai/context/project-brief.md`. Its stated context — SSR, static generation, SEO, Vercel
+> deployment, a BFF — does not describe this product, and as written it conflicts with
+> [ADR-003](003-local-daemon-over-unix-socket.md)'s rule that no TCP listener exists in the
+> product in any configuration. **It binds nothing.** It is retained as a record of what the
+> project once assumed. See [ADR-010](010-supersede-adr-001-no-web-server-ui.md) for the
+> replacement and for what survives of it.
 
 ## Context
 We need a frontend framework that supports SSR, static generation, and API routes with minimal configuration. The team has React experience.

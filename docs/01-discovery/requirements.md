@@ -310,8 +310,8 @@ testable; acceptance criteria are stated where the story is not self-evidently v
 
 | Constraint | Detail |
 |---|---|
-| **Binding ADR** | ADR-001 (Accepted): Next.js 14+ App Router, TypeScript, RSC by default — governs any web/UI surface. |
-| **Open by design** | The enforcement core's language/runtime is deliberately *not* settled by ADR-001; startup time, latency, and OS-level sandboxing are different constraints. Now proposed in [ADR-002](../05-adr/002-enforcement-core-language.md) (Rust core, TypeScript UI) — awaiting acceptance at the Phase 3 gate. |
+| **No inherited UI stack** | ADR-001 (Next.js/RSC) was scaffold boilerplate and is **superseded by [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md)**: it binds nothing. Any UI must be static assets with no server runtime and no listener, read-only against the daemon; the stack choice waits on Q-06. |
+| **Open by design** | The enforcement core's language/runtime was never settled by any earlier ADR; startup time, latency, and OS-level sandboxing are different constraints. Now proposed in [ADR-002](../05-adr/002-enforcement-core-language.md) (Rust core, TypeScript UI) — awaiting acceptance at the Phase 3 gate. |
 | **Local model runtime** | Pluggable (Ollama or equivalent). No hard dependency on one model or vendor — see [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). |
 | **No vendor SDK in the enforcement path** | And no cloud service in the policy-decision path. |
 | **Host agents unmodified** | Integration through documented hook/permission interfaces; no forks or patches — see [ADR-007](../05-adr/007-cli-integration-strategy.md). |
@@ -486,7 +486,7 @@ answered before Discovery is approved, because each changes requirements rather 
 | **Q-03** | **Threat model.** Guard against an agent that *errs*, or one *actively trying to escape* (prompt-injection-driven)? | Changes R-02's mitigation from "confine by config" to "assume adversary", and the whole sandbox design. |
 | **Q-04** | **First target CLI**, supported end-to-end. | Fixes which hook interface the v1 interception depends on. |
 | **Q-05** | **Distribution.** Single-user local tool, or team deployment with centrally-managed policy? | Promotes or demotes S-11/S-12/S-23 and the baseline-policy requirement. |
-| **Q-06** | **UI scope for v1.** CLI-and-config-file only, or is a local web UI in v1? | Determines whether ADR-001 and the accessibility/browser NFRs apply to v1 at all. |
+| **Q-06** | **UI scope for v1.** CLI-and-config-file only, or is a local UI in v1? | Determines whether the browser accessibility NFRs apply to v1 at all, and closes item 2 of [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md). Recommendation: CLI and config file only — every v1 story is reachable from a terminal. Note WCAG 2.1 AA still applies to the CLI surface. |
 | **Q-07** | **Timeline / target date.** | Needed for the phase effort estimate. |
 | **Q-08** | **Enforcement posture on day one.** Ship enforcing by default, or dry-run by default for the first N sessions? | Trades R-01 (false denies) against the product's core promise. Recommendation: dry-run for the first session, then enforce, with the transition explicit. |
 

@@ -5,8 +5,10 @@ Proposed
 
 ## Context
 
-ADR-001 fixed Next.js + TypeScript + React Server Components, and it is binding — but it was
-written for a web application's UI. This product's centre of gravity is not a UI: it is a
+ADR-001 fixed Next.js + TypeScript + React Server Components for this project. It was written for
+a web application's UI, and is now superseded by
+[ADR-010](010-supersede-adr-001-no-web-server-ui.md) — but either way it never addressed the layer
+this ADR is about. This product's centre of gravity is not a UI: it is a
 long-lived local process that must decide, before every action an AI CLI takes, whether that
 action may proceed.
 
@@ -23,7 +25,7 @@ The forces on that process are different in kind from the forces on a web UI:
   < 5 GB total budget on a 16 GB laptop.
 - **One-command install** (S-09, < 5 minutes on a clean machine).
 - `.ai/context/project-brief.md` explicitly records this as an open question rather than
-  something to inherit from ADR-001.
+  something to inherit from the scaffold's UI ADR.
 
 ## Decision
 
@@ -31,14 +33,16 @@ Split the stack at the wire contract:
 
 - **Enforcement core and the per-CLI adapters: Rust.** Distributed as a single static binary per
   platform.
-- **UI surface (audit viewer, policy editor): TypeScript + Next.js App Router with RSC by
-  default**, exactly as ADR-001 requires.
+- **UI surface (audit viewer), if Q-06 puts one in v1: TypeScript.** The framework is deliberately
+  not decided here — see [ADR-010](010-supersede-adr-001-no-web-server-ui.md), which forbids a
+  server runtime or listener and defers the stack choice. What this ADR fixes is only that the UI
+  layer is **not** Rust.
 - **The boundary is JSON-RPC over a Unix domain socket** (ADR-003), with the JSON schemas in
   Phase 3's `api-design.md` as the single source of truth. TypeScript types for the UI are
   **generated** from those schemas, not hand-maintained in parallel.
 
-ADR-001 is therefore not superseded or narrowed: it continues to govern every UI surface. This
-ADR decides only the layer ADR-001 never addressed.
+This ADR decides only the enforcement layer, which no earlier ADR addressed. The UI half of the
+split is now governed by [ADR-010](010-supersede-adr-001-no-web-server-ui.md).
 
 ## Rationale
 
@@ -88,7 +92,7 @@ Trade-offs accepted, stated plainly:
 2. Make schema-driven codegen a build step with a CI check that regeneration is a no-op.
 3. Set up cross-compilation for the platforms Q-02 selects.
 4. Revisit this ADR if Q-06 answers "no UI in v1" — the product is then single-language (Rust) and
-   ADR-001 has nothing to govern until a UI exists.
+   the TypeScript half of this decision is dormant until a UI exists.
 
 ## Rejected Alternatives
 
@@ -108,8 +112,9 @@ Trade-offs accepted, stated plainly:
   written in a language without memory safety. The decision is not close.
 - **Python.** Rejected outright: start-up cost, packaging, and the GIL against a concurrency
   requirement of 4 sessions.
-- **Rust everywhere, including the UI (WASM or a native GUI).** Rejected: it would contradict
-  ADR-001 for no benefit, since the UI has no latency budget and is out of the enforcement path.
+- **Rust everywhere, including the UI (WASM or a native GUI).** Rejected: the UI has no latency
+  budget and is out of the enforcement path, so it buys nothing, and it would narrow the hiring and
+  contribution pool for the layer where that matters least.
 - **A thin native adapter shelling into a Node daemon.** Considered as the compromise that keeps
   most logic in TypeScript. Rejected: it keeps the language boundary *and* the Node memory and
   start-up costs, adds a hop, and puts the policy engine — the part most needing to be fast and
@@ -119,7 +124,8 @@ Trade-offs accepted, stated plainly:
 **ADR Number**: 002
 **Date**: 2026-09-28
 **Author**: Claude (draft for review by Aries Ng)
-**Related**: [ADR-001](001-use-react-and-typescript.md) (UI, unchanged) ·
+**Related**: [ADR-010](010-supersede-adr-001-no-web-server-ui.md) (governs the UI half; supersedes
+ADR-001) ·
 [ADR-003](003-local-daemon-over-unix-socket.md) ·
 [ADR-008](008-sandbox-confinement-primitive.md) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) ·
