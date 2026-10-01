@@ -1,7 +1,7 @@
 # 04 — Solution Design: State Management
 
 **Status**: Draft
-**Last updated**: 2026-09-28
+**Last updated**: 2026-10-02
 **Approved by**: _pending_
 
 > **Phase-gate note.** Drafted ahead of the Phase 3 gate at the product owner's request; rests on
@@ -34,6 +34,8 @@ The core never reads UI state. The UI never holds authoritative state.
 | Model runtime handle / warm state | `LocalModelRuntime` | Daemon process | Ephemeral | Bounded concurrency (see A.5) |
 | Health + coverage snapshot | `HealthReporter` | Recomputed on read | None | Read-only derivation |
 | Pending `ask` prompts | `SessionRegistry` | Until answered or timeout | None | One in flight per session |
+| Install receipt (adapters registered, host config paths touched, runtime/weights provisioned) | `Installer` | **Across installs, outlives the daemon** | Durable | Written by `guard install` / `guard uninstall` only; never during a session |
+| Host CLI configuration (hook entry, MCP server entry) | **The user**, mutated by the adapter | Across installs | Durable, **not ours** | Written only by `install`/`uninstall`; hand-editable at any time |
 
 Everything durable is on disk and owned by exactly one writer. Everything in memory is
 reconstructible or safely lost — the fail-closed default (`component-design.md` §2.3) means
@@ -107,7 +109,32 @@ requests at native latency.
   exactly when the machine is busiest.
 - Per-session fairness: round-robin across sessions so one agent's burst cannot starve another's.
 
-### A.6 What is deliberately not persisted
+### A.6 Installed state — the only state we do not own
+
+Two entries in A.1 sit outside the daemon's lifetime, and one of them is not ours: the host CLI's
+configuration. Everything else in this document is state the product can rebuild from disk or
+safely lose; a hook entry in the developer's settings file is state **we wrote into someone else's
+file** and must be able to retract (FR-27, [ADR-007](../05-adr/007-cli-integration-strategy.md)
+items 10–12).
+
+The hazard: treating the install receipt as the authority on what is installed. The receipt can be
+deleted, restored from a backup, or be stale after a hand-edit, and the fail-closed default means a
+hook the receipt does not mention still denies every action. So:
+
+- **The receipt is a cache, not a source of truth.** `guard uninstall` enumerates adapters from the
+  receipt **and** probes every known host-config location; `CliAdapter.isRegistered` answers from
+  the host's real configuration (`component-design.md` §2.8).
+- **Removal is driven by the probe, and verified by it.** The daemon is stopped only once every
+  adapter probes `false`; a probe that still returns `true` aborts the removal with the daemon
+  running (`routing.md` §2.1).
+- **Host config is edited surgically.** The file is the developer's, may be hand-maintained, and
+  must come back with their other entries and their formatting intact — removal deletes our entry,
+  never rewrites the document.
+- **Policy file, audit log and model weights survive removal** unless `--purge` is given; their
+  paths are printed. The log in particular is evidence, not product state
+  ([ADR-006](../05-adr/006-audit-log-integrity.md) item 11).
+
+### A.7 What is deliberately not persisted
 
 Session registry, decision cache, pending prompts, and model warm state are all in-memory. A
 daemon restart therefore loses them — and that is the desired behaviour: fresh state re-derives
@@ -239,6 +266,7 @@ audit log when it simply cannot reach the engine actively misleads the person re
 | NFR accessibility | B.6 loading/error states; `component-design.md` §3 |
 | R-03 (latency → uninstall) | A.3, A.5 |
 | R-07 (agent weakens its guard) | A.4, B.2 read-only API |
+| FR-24, FR-27 (install / removal) | A.1 install receipt + host config rows; A.6 installed state |
 
 **Related**: [`component-design.md`](component-design.md) · [`routing.md`](routing.md) ·
 [`testing-strategy.md`](testing-strategy.md) · ADRs

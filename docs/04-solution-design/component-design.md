@@ -1,7 +1,7 @@
 # 04 — Solution Design: Component Design
 
 **Status**: Draft
-**Last updated**: 2026-09-28
+**Last updated**: 2026-10-02
 **Approved by**: _pending_
 
 > **Phase-gate note.** `docs/04-solution-design/README.md` names **System Design approved** as
@@ -289,11 +289,27 @@ interface CliAdapter {
   normalise(hostPayload: unknown): Result<Action, NormalisationError>;
   renderDenial(d: Denial): HostResponse;        // FR-15, in the host's own shape
   install(): Promise<InstallReport>;            // S-09 one-command enable
+  uninstall(): Promise<RemovalReport>;          // S-25, FR-27 — de-register from host config
+  isRegistered(): Promise<boolean>;             // FR-27 verification gate; probes host config
+  plannedChanges(op: 'install' | 'uninstall'): Promise<FileChange[]>;  // FR-27 `--print`
 }
 ```
 
 One adapter per CLI, each the only place a vendor's payload shape is known. A vendor's breaking
 change touches one directory — the containment R-05 needs.
+
+`install` and `uninstall` are **required in pairs**: an adapter that can write itself into a host
+CLI's configuration but cannot remove itself does not satisfy the contract, because the residue it
+leaves behind is a registered hook with no engine, which under
+[ADR-009](../05-adr/009-fail-closed-default.md) denies every action the host attempts. Both methods
+are **idempotent**, and `uninstall` resolves to `removed` or `already-absent` rather than failing
+when the host config has been hand-edited.
+
+`isRegistered` is what makes the teardown ordering in
+[`routing.md` §2.1](routing.md#21-removal-semantics-guard-uninstall) enforceable: the daemon is
+stopped only once every adapter reports `false`. It probes the host CLI's real configuration rather
+than trusting the install receipt, so a deleted or stale receipt cannot orphan a live hook.
+`plannedChanges` backs `guard uninstall --print` and must perform no writes.
 
 ---
 
@@ -376,6 +392,7 @@ and never removed. Contrast ≥ 4.5:1 for body text in both themes.
 | FR-24 | `CliAdapter.install` |
 | FR-25 | `SessionRegistry` + `AuditRecord.override` |
 | FR-26 | `PolicyWatcher` |
+| FR-27 | `CliAdapter.uninstall` / `.isRegistered` / `.plannedChanges`, `core/audit` terminal record, daemon lifecycle |
 
 ---
 

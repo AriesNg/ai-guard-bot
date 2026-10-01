@@ -1,7 +1,7 @@
 # 04 — Solution Design: Routing
 
 **Status**: Draft
-**Last updated**: 2026-09-28
+**Last updated**: 2026-10-02
 **Approved by**: _pending_
 
 > **Phase-gate note.** Drafted ahead of the Phase 3 gate at the product owner's request; rests on
@@ -128,6 +128,7 @@ The audit append sits **before** the response, not after. That ordering is the w
 | Command | Purpose | Story |
 |---|---|---|
 | `guard install [--agent <name>]` | One-command install and enable, including model-runtime provisioning; prints the coverage matrix | S-09, FR-24 |
+| `guard uninstall [--agent <name>] [--purge] [--print]` | Detach adapters and remove the guard; `--agent` detaches one integration only; `--purge` also deletes policy, log and model weights; `--print` lists the files it would touch and changes nothing — see §2.1 | S-25, FR-27 |
 | `guard status` | Health, policy version, per-CLI coverage, enforcing vs dry-run | FR-23 |
 | `guard policy init` | Write an opinionated safe default policy — the zero-authoring path | R-06, persona P4 |
 | `guard policy validate [file]` | Parse, merge, narrow-only check; non-zero exit on failure (CI-usable) | FR-04, FR-05, S-18 |
@@ -143,6 +144,64 @@ The audit append sits **before** the response, not after. That ordering is the w
 Conventions: exit `0` allow/success, `1` operational error, `2` policy invalid, `3` denied —
 scriptable. Human output respects `NO_COLOR` and works without colour; `--json` on every read
 command for machine use (Accessibility NFR).
+
+### 2.1 Removal semantics (`guard uninstall`)
+
+Removal is **not** the install sequence reversed. Install provisions bottom-up (runtime, daemon,
+adapters); removal must proceed **top-down**, and the ordering is load-bearing rather than
+cosmetic.
+
+```mermaid
+flowchart TD
+    A["guard uninstall"] --> B{"--print?"}
+    B -- yes --> P["list every file that would change; exit 0; touch nothing"]
+    B -- no --> C["enumerate installed adapters<br/>(from install receipt + live probe)"]
+    C --> D["de-register each adapter from the host CLI config<br/>hooks removed, MCP proxy entry removed"]
+    D --> E{"any adapter still registered?"}
+    E -- yes --> X["abort, daemon left RUNNING, exit 1<br/>guard stays functional, nothing is half-removed"]
+    E -- no --> F["append terminal audit record<br/>kind=guard.removed, chain-valid"]
+    F --> G["stop daemon, remove socket + service definition"]
+    G --> H{"--purge?"}
+    H -- no --> I["retain policy, audit log, model weights<br/>print their paths"]
+    H -- yes --> J["confirm, then delete policy, audit log, model weights"]
+```
+
+**Why this order.** Under the fail-closed default
+([ADR-009](../05-adr/009-fail-closed-default.md)) an adapter that cannot reach the daemon denies the
+action. If the daemon were stopped first, every action the host CLI attempted in the interval
+between daemon shutdown and hook removal would be **denied**, and a crash inside that interval
+would leave the host CLI permanently unable to act. Stopping the engine while a hook is still
+registered is therefore the one genuinely destructive sequencing error available to this command,
+and step **E** exists to make it unreachable: if any adapter cannot be de-registered, the command
+aborts with the daemon still running and the guard still working. A failed uninstall leaves a
+working guard, never a broken host CLI.
+
+**Detach versus purge.**
+
+| Invocation | Adapters | Daemon | Policy file | Audit log | Model weights |
+|---|---|---|---|---|---|
+| `guard uninstall --agent claude-code` | that one removed | kept running | kept | kept | kept |
+| `guard uninstall` | all removed | stopped, removed | kept | kept | kept |
+| `guard uninstall --purge` | all removed | stopped, removed | **deleted** | **deleted** | **deleted** |
+
+Retention is the default because the audit log is the product's evidence record and is
+hash-chained ([ADR-006](../05-adr/006-audit-log-integrity.md)); silently destroying it on removal
+would delete exactly the history a user is most likely to want *after* deciding to stop using the
+tool. `--purge` prompts for confirmation on an interactive terminal and requires `--yes` when
+stdin is not a TTY.
+
+**Terminal audit record.** A hash chain that simply stops is indistinguishable from truncation, so
+`guard log verify` would report a removed install as a suspected tamper. Removal therefore appends
+a final `guard.removed` record — carrying the timestamp, the adapters removed, and whether
+`--purge` was requested — as the last link, before the daemon stops. Verification of a removed
+install is then expected to succeed and to end on that record.
+
+**Idempotency and broken state.** `guard uninstall` must succeed (exit `0`) when the install is
+already partially gone — binary present but hooks hand-edited away, daemon already dead, receipt
+file missing — reporting each component as `removed`, `not found`, or `already absent`. It
+discovers adapters from the install receipt *and* by probing the known host-CLI config locations,
+so a lost receipt does not orphan a live hook. Exit `1` is reserved for a removal it attempted and
+could not complete.
 
 ---
 

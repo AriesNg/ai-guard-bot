@@ -25,7 +25,7 @@ not weigh explicitly, those are stated under Consequences and flagged, not silen
 | Q-03 | Threat model | **An agent that errs**, not one actively trying to escape | ADR-008's conditional recommendation; confinement by allowlist is sufficient |
 | Q-04 | First integration | **Two adapters at ship: one hook-based (Claude Code) and the vendor-neutral MCP proxy** | ADR-007's Sprint-1 scope; the `CliAdapter` contract is validated against two different integration shapes |
 | Q-05 | Distribution | **Single-user local tool** | No baseline/project policy layering, no policy distribution, no central management in v1 |
-| Q-06 | Interface | **CLI and config file, plus a TUI audit viewer** | ADR-010 item 2; no web UI, no browser, no asset-serving path |
+| Q-06 | Interface | **CLI and config file, plus a TUI audit viewer** | ADR-010 item 2; no web UI, no browser, no asset-serving path. The CLI surface includes **removal** (`guard uninstall`, S-25/FR-27): with two adapters writing into host-owned config and enforcement on from the first action, reversibility is in the v1 envelope, not after it |
 | Q-07 | Timeline | **Side project, intermittent** | Sprints must each land something independently useful and survive long gaps |
 | Q-08 | Day-one posture | **Enforcing immediately** — no dry-run grace period | FR default mode; `guard dry-run` remains available voluntarily |
 | Q-01 | Local model | **Still open.** "laya" is a specific model the owner has in mind, not a Llama-class placeholder | ADR-005 stays blocked |
@@ -108,6 +108,12 @@ Trade-off accepted, with a reservation recorded:
    makes them release blockers.
 6. Add WCAG 2.1 AA checks for the terminal and TUI surfaces to
    `../04-solution-design/testing-strategy.md`, which currently scopes accessibility to a web UI.
+7. Treat **clean removal as a Sprint 1 deliverable alongside the adapters** (S-25, FR-27,
+   ADR-007 items 10–12). It is not a release-blocking *gate* in the sense the accuracy gate is, but
+   it ships with the adapter that makes it necessary: the first adapter to write into a host's
+   config is the moment the product can brick a user's CLI, and R-01 names uninstall as the exit
+   path from the top risk. Shipping `install` without `uninstall` would make the acknowledged
+   remedy for a false-deny the thing that breaks the host.
 
 **One open point this ADR raises, for the owner to confirm**
 

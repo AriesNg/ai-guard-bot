@@ -42,6 +42,14 @@ question (Q-01). What is *not* open:
    exercised only in the accuracy and performance gates.
 8. **The model is never the sole gate on a catastrophic action** — guaranteed by ADR-004, restated
    here because it is the reason this ADR can accept a small model at all.
+9. **The port declares what provisioning wrote to disk**, so removal can undo it: `guard install`
+   provisions the runtime and weights, and `guard uninstall --purge` deletes them (FR-27). Weights
+   are multi-gigabyte, so leaving them behind silently is a real cost — but deleting them on a plain
+   `uninstall` is also wrong, because a reinstall would re-download them and `install`'s 5-minute
+   budget (S-09) assumes it may not have to. Plain removal therefore **retains** the weights and
+   prints their path and size; `--purge` removes them. A runtime the product did not install (an
+   Ollama the developer already ran) is never removed, only de-referenced — which the port must be
+   able to distinguish, so provisioning records whether it installed the runtime or adopted one.
 
 ## Rationale
 

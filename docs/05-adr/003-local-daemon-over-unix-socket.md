@@ -40,6 +40,12 @@ The constraints that decide it:
    policy authoring.
 6. **Method-level read/write split**: only adapters may call `decide`; the UI and the audit reader
    are permitted read methods only; nothing outside `AuditWriter` can append a record.
+7. **The daemon's lifecycle is owned by `install` / `uninstall`, and it is the *last* thing torn
+   down.** Removal stops the daemon, unlinks the socket, and deletes the service definition
+   (launchd agent / systemd user unit) so nothing restarts it — but only after every adapter is
+   de-registered (FR-27, [ADR-009](009-fail-closed-default.md) item 12). A stopped daemon with a
+   live hook is not a degraded state, it is a host CLI that denies everything; a stale socket with
+   no adapters, by contrast, is inert. The asymmetry is why the order is fixed.
 
 ## Rationale
 

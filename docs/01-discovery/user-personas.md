@@ -38,8 +38,11 @@ stories and, where the persona would reject the product, says what that rejectio
 - Rules she can write in five lines of English (S-01).
 - Silence in the common case — if it interrupts her as often as the vendor prompt, it is the same product she already rejected (S-03).
 - The catastrophic cases blocked deterministically, not probabilistically (FR-11, R-01).
+- A one-command exit (S-25). Dana skipped permissions because they cost more than they gave; she
+  will only try a guard that enforces from her first action if walking away is as cheap as starting
+  — and if removing it cannot leave her CLI unable to run.
 
-**Stories**: S-01, S-02, S-03, S-04, S-05, S-06, S-08, S-09, S-10, S-15, S-17
+**Stories**: S-01, S-02, S-03, S-04, S-05, S-06, S-08, S-09, S-10, S-15, S-17, S-25
 
 **She rejects it if**: it adds noticeable latency to her session, asks her more than a couple of
 times a day, or blocks something reasonable and leaves her editing rules mid-task.

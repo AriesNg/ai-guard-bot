@@ -51,6 +51,17 @@ Constraints:
    the place secrets accumulate in clear text.
 9. **Cache hits and overrides are full records too** — `evaluator: 'cache'` with the originally
    deciding rule ids; overrides with actor and justification (FR-25). FR-19 admits no gaps.
+10. **A chain closes with an explicit terminal record.** Removing the product appends a final
+    `kind: 'guard.removed'` record — timestamp, adapters de-registered, whether `--purge` was
+    requested — as the last link, written *before* the daemon stops (FR-27,
+    `../04-solution-design/routing.md` §2.1). `audit.verify` treats a chain ending on
+    `guard.removed` as **complete**; a chain ending on any other record with no running daemon is
+    reported as a possible truncation. Without this, an ordinary uninstall is indistinguishable
+    from tail-truncation — the product would accuse its own removal of tampering, and a real
+    truncation would gain a plausible excuse.
+11. **The log survives removal by default.** `guard uninstall` retains the log and prints its path;
+    only `--purge` deletes it, with confirmation. The log is the user's evidence record, not the
+    product's private state, and it is most likely to be wanted *after* the tool is gone.
 
 ## Rationale
 
@@ -109,6 +120,10 @@ Trade-offs accepted:
 4. Set the log directory's permissions at install time and assert the `Confinement` exclusion in a
    test that tries every policy shape.
 5. State plainly in the threat model that the guarantee is detection, not prevention.
+6. Add `guard.removed` to the record-kind enum and extend `audit.verify`'s outcomes to distinguish
+   *complete*, *closed by removal*, and *suspected truncation* — then test verification of a
+   removed install, and of a chain truncated to look like one (the terminal record is hash-chained,
+   so forging it requires the chain, which is the same assumption the rest of this ADR rests on).
 
 ## Rejected Alternatives
 
@@ -143,5 +158,5 @@ Trade-offs accepted:
 **Author**: Claude (draft for review by Aries Ng)
 **Related**: [ADR-003](003-local-daemon-over-unix-socket.md) ·
 [ADR-009](009-fail-closed-default.md) ·
-[`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-19–FR-22, R-07 ·
+[`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-19–FR-22, FR-27, R-07 ·
 [`../04-solution-design/state-management.md`](../04-solution-design/state-management.md) §A.4

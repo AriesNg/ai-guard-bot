@@ -1,7 +1,7 @@
 # 04 — Solution Design: Testing Strategy
 
 **Status**: Draft
-**Last updated**: 2026-09-28
+**Last updated**: 2026-10-02
 **Approved by**: _pending_
 
 > **Phase-gate note.** Drafted ahead of the Phase 3 gate at the product owner's request; rests on
@@ -176,6 +176,21 @@ Each maps to a P0 story and runs against the real target CLI in a scratch repo.
    logged and in-flight decisions are judged under the version they started with (FR-26).
 10. **Coverage gap is honest** — configure an adapter with a missing action class; startup reports
     it and that class is denied rather than silently allowed (FR-10, R-04).
+11. **Uninstall leaves a working CLI** — from the enforcing state of journey 1, run
+    `guard uninstall`; assert the host CLI's configuration contains no guard hook, an agent session
+    runs with **zero** guard-originated denials, the daemon and socket are gone, the policy file and
+    audit log remain at the printed paths, and `guard log verify` passes and ends on the
+    `guard.removed` record (S-25, FR-27, ADR-006 item 10). Variants, all asserting the same
+    post-state: `--agent <name>` with a second adapter installed (the other stays enforcing);
+    re-running `guard uninstall` on an already-removed install (exit `0`, every component reported
+    `already absent`); removal after the host config was hand-edited to drop the hook; `--print`
+    (exit `0` and **no** file modified — asserted by hashing the config tree before and after);
+    and `--purge` (policy, log and weights gone, confirmation required).
+12. **Teardown is crash-safe** — kill the process at each step of the removal sequence and assert
+    the host CLI is left either fully guarded or fully unguarded, never with a registered hook and
+    an absent engine; re-running `guard uninstall` after each kill reaches the clean end state
+    (FR-27, ADR-009 item 12). This is the adversarial half of journey 11 and runs in the
+    adversarial gate (§2.2), not only as an E2E.
 
 ---
 
@@ -243,6 +258,7 @@ asserted.
 | FR-24, S-09 | E2E 1 |
 | FR-25 | E2E 8 |
 | FR-26 | E2E 9 |
+| FR-27, S-25 | E2E 11; adversarial teardown-crash matrix (E2E 12) |
 | R-01 | Accuracy gate, false-deny regression rule |
 | R-03 | Performance gate §2.3 |
 | R-05 | Per-version adapter fixtures |

@@ -50,6 +50,13 @@ The forces:
     policy boundary to work around.
 11. **The adapter applies a timeout with a fail-closed default**, so an unresponsive daemon denies
     rather than hanging the developer's session indefinitely (ADR-003).
+12. **Uninstall is the one lifecycle operation that must not be fail-closed, and the ordering is
+    what guarantees it.** Fail-closed means a registered adapter with no engine denies everything,
+    so teardown de-registers every adapter **before** stopping the daemon, and aborts with the
+    daemon still running if any adapter cannot be de-registered
+    (`../04-solution-design/routing.md` §2.1, ADR-007 items 10–12, FR-27). There is no "fail-open
+    during shutdown" mode: the guard is either present and enforcing, or absent and not registered.
+    The invariant is that **no state exists in which a hook is registered and the engine is gone**.
 
 ## Rationale
 
@@ -79,6 +86,12 @@ Trade-offs accepted:
 - **Saturation denials may be surprising** under heavy parallel use, and will read as flakiness
   unless the reason is clear — which is why the reason text is part of the decision, not an
   afterthought.
+- **Fail-closed turns an incomplete uninstall into a bricked host CLI**, which is why removal is
+  specified as carefully as enforcement. Every other fail-closed consequence is recoverable by
+  fixing the guard; this one is reached *by removing the guard*, so the usual remedy has already
+  been taken away and the error has no author left to blame. It is the strongest argument for
+  pairing `uninstall` with `install` in the adapter contract rather than documenting manual removal
+  steps.
 - **Fail-closed can mask a misconfiguration as a policy problem** if the error codes are not
   distinct, which is why item 10 is a requirement rather than a nicety.
 
@@ -111,6 +124,9 @@ Trade-offs accepted:
    (`../04-solution-design/testing-strategy.md` §5, case 5) and the saturation case to the
    adversarial gate.
 5. Size the model queue against the 4-session target so saturation is rare in normal use.
+6. Add the uninstall-ordering test to the adversarial gate: kill the process mid-teardown at each
+   step and assert the host CLI is left either fully guarded or fully unguarded, never with a
+   registered hook and no engine (`../04-solution-design/testing-strategy.md` §5, case 12).
 
 ## Rejected Alternatives
 
@@ -144,5 +160,5 @@ Trade-offs accepted:
 **Related**: [ADR-003](003-local-daemon-over-unix-socket.md) ·
 [ADR-004](004-layered-policy-model.md) · [ADR-005](005-pluggable-local-model-runtime.md) ·
 [ADR-006](006-audit-log-integrity.md) · [ADR-007](007-cli-integration-strategy.md) ·
-[`../01-discovery/requirements.md`](../01-discovery/requirements.md) S-08, FR-10, Availability NFR ·
+[`../01-discovery/requirements.md`](../01-discovery/requirements.md) S-08, S-25, FR-10, FR-27, Availability NFR ·
 [`../04-solution-design/state-management.md`](../04-solution-design/state-management.md) §A.5

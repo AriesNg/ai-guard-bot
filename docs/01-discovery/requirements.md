@@ -1,7 +1,7 @@
 # 01 — Discovery: Requirements
 
 **Status**: Draft
-**Last updated**: 2026-09-28
+**Last updated**: 2026-10-02
 **Approved by**: _pending_
 
 ---
@@ -125,6 +125,21 @@ testable; acceptance criteria are stated where the story is not self-evidently v
   *Accepts:* keyboard-only operation; every query the TUI can express is also expressible as
   `guard audit query` producing the same rows; the TUI opens no socket the CLI does not already use
   and has no write path to policy.
+- **S-25** As a developer, I want to remove the guardrail — or detach it from one CLI — with one
+  command, so that trying it is reversible and a guard I no longer want cannot leave my agent CLI
+  broken behind it.
+  *Rationale:* `install` (S-09) writes into configuration **the user owns elsewhere** — the host
+  CLI's hook settings and its MCP server list ([ADR-007](../05-adr/007-cli-integration-strategy.md)).
+  Combined with the fail-closed default ([ADR-009](../05-adr/009-fail-closed-default.md)), a
+  registered hook whose binary has been deleted denies *every* subsequent agent action, so
+  "uninstall by `rm`" is not merely unsupported — it bricks the host CLI. R-01 also names uninstall
+  as the user's exit path from a false-deny, so that path cannot be undefined.
+  *Accepts:* after removal, the host CLI runs with no guard hook registered and no residual
+  denials; removal is idempotent and exits `0` from a partially-installed or hand-edited state,
+  naming what it could not find; the audit log and policy file survive by default and their paths
+  are printed; `--purge` is required to delete them and prompts for confirmation; the audit chain
+  ends with a verifiable terminal record so `guard log verify` can distinguish removal from
+  truncation.
 
 ### P1 — Should Have
 
@@ -256,6 +271,13 @@ policy distribution or a team view that a single-user local tool has nowhere to 
   override, the actor, and the justification as a distinct log event.
 - **FR-26** The system SHALL hot-reload a changed policy without restarting a running agent
   session, and SHALL log the policy version transition.
+- **FR-27** The system SHALL remove itself — wholly, or from a single named CLI — via a single
+  documented command that (a) de-registers every adapter from the host CLI's configuration
+  **before** stopping the daemon, so that no interval exists in which a registered hook faces an
+  absent engine; (b) retains the audit log and the policy file unless deletion is explicitly
+  requested; (c) appends a terminal, chain-valid record to the audit log describing the removal;
+  and (d) succeeds idempotently from a partially-installed state. The command SHALL be able to
+  report the exact set of files it would modify without modifying them.
 
 ---
 
@@ -273,6 +295,8 @@ policy distribution or a team view that a single-user local tool has nowhere to 
 | Audit log write | **P95 < 5 ms, never blocking the decision path beyond that** |
 | Audit query over 30 days / 1 M records | **P95 < 1 s** |
 | Cold start, engine ready to decide | **< 2 s excluding model-runtime warm-up; < 15 s including it** |
+| Removal to clean state (`guard uninstall`, FR-27) | **< 30 s**, excluding `--purge` deletion of model weights |
+| Window in which a hook is registered with no reachable engine, during removal | **0 ms — no such state exists** (adapters de-register first; see ADR-009 item 12) |
 
 ### Scalability
 
@@ -423,7 +447,7 @@ the product opens no TCP port in any configuration
 
 | # | Risk | Impact | Likelihood | Mitigation |
 |---|---|---|---|---|
-| **R-01** | **Local model decisions are wrong.** A false allow defeats the product; a false deny makes it unusable and it gets uninstalled. **Raised to the top risk by Q-08** (2026-10-02): with the product enforcing from the first action, there is no observation period in which false denies are harmless. | Critical | High | Deterministic rules decide first and cover all catastrophic classes (credential paths, destructive commands, egress) so the model is never the only thing between the agent and an irreversible action. Versioned evaluation corpus with the FR-11 accuracy gates enforced in CI — **now a release blocker, not a target**, since nothing else stands between a bad model and a first-run denial. The **shipped default policy must be conservative and measured against real sessions before release** (the work dry-run would otherwise have done in the user's first session is moved pre-release). One-off override (S-15) and a denial reason that names the rule and the remedy (S-04) are the difference between a tuning annoyance and an uninstall; per-rule confidence thresholds with `ask` as the middle outcome. `guard dry-run` (S-10) remains available voluntarily. |
+| **R-01** | **Local model decisions are wrong.** A false allow defeats the product; a false deny makes it unusable and it gets uninstalled. **Raised to the top risk by Q-08** (2026-10-02): with the product enforcing from the first action, there is no observation period in which false denies are harmless. | Critical | High | Deterministic rules decide first and cover all catastrophic classes (credential paths, destructive commands, egress) so the model is never the only thing between the agent and an irreversible action. Versioned evaluation corpus with the FR-11 accuracy gates enforced in CI — **now a release blocker, not a target**, since nothing else stands between a bad model and a first-run denial. The **shipped default policy must be conservative and measured against real sessions before release** (the work dry-run would otherwise have done in the user's first session is moved pre-release). One-off override (S-15) and a denial reason that names the rule and the remedy (S-04) are the difference between a tuning annoyance and an uninstall; and because uninstall is the acknowledged exit path from this risk, it must be **clean and one command** (S-25, FR-27) — a removal that leaves a dead hook behind converts a false-deny into a broken CLI and turns a lost user into a hostile one; per-rule confidence thresholds with `ask` as the middle outcome. `guard dry-run` (S-10) remains available voluntarily. |
 | **R-02** | **The sandbox is escapable**, particularly by an agent driven by prompt injection rather than one merely erring. | Critical | Medium | Publish a concrete threat model naming what is and is not stopped (FR-18); never claim absolute isolation; choose an OS-native primitive over a hand-rolled boundary and record the choice in an ADR; treat the engine's own config and log as outside the agent's reach; screen inbound content for injection (S-16); assume breach and rely on the audit log to detect it. **Q-03 answered 2026-10-02:** the adversary is an erring agent, so confinement by allowlist is sufficient for the v1 claim — and the no-prevention-claim for injection-driven escape is published rather than implied ([ADR-008](../05-adr/008-sandbox-confinement-primitive.md) item 12). |
 | **R-03** | **Latency makes developers turn it off** — the exact failure mode of the prompts this replaces. | High | Medium | Hard NFR budgets above with the model off the hot path for ≥ 80 % of actions; decision cache keyed on normalised action + policy version; latency surfaced per action (S-17) and in metrics so regressions are visible; a performance regression gate in CI on the reference workload. |
 | **R-04** | **Interception is incomplete** — an action class slips past, giving false assurance, which is worse than no guardrail. | Critical | Medium | Per-CLI coverage matrix published and asserted at startup (FR-23); deny-by-default for unmapped action classes (FR-10); a red-team action set in E2E that tries to reach the OS around the interception points; refuse to advertise support for a CLI until its matrix is complete. |

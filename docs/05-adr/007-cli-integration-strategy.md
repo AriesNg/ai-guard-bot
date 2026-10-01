@@ -32,8 +32,9 @@ Fixed constraints:
 ## Decision
 
 1. **One adapter per host CLI**, each implementing a single internal `CliAdapter` contract:
-   `normalise`, `renderDenial`, `install`, plus declared `supportedVersions` and `coverage`. An
-   adapter is the **only** place a vendor's payload shape is known.
+   `normalise`, `renderDenial`, `install`, `uninstall`, `isRegistered`, `plannedChanges`, plus
+   declared `supportedVersions` and `coverage`. An adapter is the **only** place a vendor's payload
+   shape is known.
 2. **Integrate through the host's documented hook or permission interface** where one exists. No
    forks, no patches, no monkey-patching of the host's internals.
 3. **MCP proxy as the fallback** for CLIs with no hook interface (FR-09), behind the same contract,
@@ -54,6 +55,18 @@ Fixed constraints:
 9. **Denials are rendered into the host's own response shape** by the adapter, from one
    `GuardError` (`../04-solution-design/routing.md` §1.3), so the stable error codes S-04 depends on
    are identical across hosts.
+10. **Writing into a host's configuration obliges the adapter to be able to unwrite it.**
+    `install` and `uninstall` are a required pair (S-25, FR-27); an adapter that can register itself
+    but not de-register itself does not satisfy this contract. `uninstall` is idempotent and
+    reports `removed` or `already-absent` rather than failing on a hand-edited host config.
+11. **Registration state is discovered, not remembered.** `isRegistered` probes the host CLI's real
+    configuration rather than trusting the install receipt, so a deleted or stale receipt cannot
+    orphan a live hook; and `guard uninstall` enumerates adapters from the receipt *and* by probing
+    the known host-config locations.
+12. **The daemon is stopped only after every adapter reports de-registered.** Teardown runs
+    top-down — adapters, then engine — the inverse of install's bottom-up order
+    (`../04-solution-design/routing.md` §2.1). If any adapter cannot be de-registered, removal
+    aborts with the daemon still running.
 
 ## Rationale
 
@@ -73,6 +86,15 @@ Fixed constraints:
 - **Refusing to fork the host** is not only a constraint from the brief: a fork would make the
   product responsible for the host's behaviour and would be bypassed by the user's next `npm
   install -g`.
+- **Reversibility is the price of writing into someone else's config.** Integrating through a host's
+  hook interface means mutating a file the developer owns and did not ask us to own. Combined with
+  the fail-closed default ([ADR-009](009-fail-closed-default.md)), the residue of an incomplete
+  removal is not inert: a registered hook with no engine denies **every** action the host attempts,
+  so deleting our binary bricks the user's CLI. Pairing `uninstall` with `install` in the contract
+  is what keeps that from being an available end state, and the top-down teardown order is what
+  keeps it from occurring *during* a removal. R-01 also names uninstall as the user's exit path from
+  a false-deny; a product whose acknowledged exit is undefined has not finished mitigating its own
+  top risk.
 
 Trade-offs accepted:
 
@@ -107,12 +129,16 @@ Trade-offs accepted:
    ([ADR-011](011-v1-scope-envelope.md)).
 2. Confirm Claude Code's hook surface covers every `ActionKind` it can perform, and publish the
    coverage matrix for both adapters before advertising support for either.
-3. Build the red-team interception-bypass suite (`../04-solution-design/testing-strategy.md` §2.2)
+3. Establish, per host, **where** registration lives and whether removal can be done without
+   rewriting unrelated user configuration — a hook entry inside a settings file the developer also
+   hand-maintains must be removed surgically, preserving their formatting and their other entries.
+   This is an open integration detail for both v1 adapters and belongs in the Sprint 1 spike.
+4. Build the red-team interception-bypass suite (`../04-solution-design/testing-strategy.md` §2.2)
    against the real host: relative and symlinked paths, shell chaining and command substitution, a
    shell spawned to run a blocked command, an interpreter one-liner performing a blocked write.
-4. Define the coverage matrix's `ActionKind` list in Phase 3 and make an incomplete matrix a
+5. Define the coverage matrix's `ActionKind` list in Phase 3 and make an incomplete matrix a
    loud startup report, not a log line.
-5. Decide the support policy for a host version outside the declared range — refuse, or run with a
+6. Decide the support policy for a host version outside the declared range — refuse, or run with a
    printed warning and every class degraded to `ask`. Recommendation: refuse, since a mis-parsed
    payload is a wrong decision.
 
@@ -143,6 +169,16 @@ Trade-offs accepted:
 - **Publish "supports every AI CLI" and integrate opportunistically.** Rejected as a marketing
   claim the coverage matrix would immediately contradict; the matrix exists so that support claims
   are checkable.
+- **Install-only adapters, with removal documented as manual steps** ("delete these lines from your
+  settings file"). Cheaper per adapter, and arguably more transparent. Rejected: the failure is
+  asymmetric. A user who follows the steps imperfectly — or deletes the binary first, which is what
+  people actually do — is left with a hook facing an absent engine, which fail-closed turns into a
+  CLI that refuses every action, with no obvious cause and our product already gone. Removal
+  correctness cannot be delegated to a user who has by then stopped reading our documentation.
+- **A separate `guard detach` command for per-CLI removal**, with `guard uninstall` reserved for
+  whole-product removal. Rejected for v1: `uninstall --agent <name>` mirrors `install --agent
+  <name>`, so the pair is learnable as one idea, and a second verb would need its own
+  purge/retain semantics. Revisit if detach acquires options that removal does not want.
 
 ---
 **ADR Number**: 007
@@ -151,5 +187,5 @@ Trade-offs accepted:
 **Related**: [ADR-011](011-v1-scope-envelope.md) (answers Q-04: two adapters at ship) ·
 [ADR-003](003-local-daemon-over-unix-socket.md) ·
 [ADR-008](008-sandbox-confinement-primitive.md) · [ADR-009](009-fail-closed-default.md) ·
-[`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-07–FR-10, R-04, R-05 ·
+[`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-07–FR-10, FR-27, R-04, R-05, S-25 ·
 [`../04-solution-design/component-design.md`](../04-solution-design/component-design.md) §2.8
