@@ -115,7 +115,8 @@ The single normalisation point. Every adapter produces this; every evaluator con
 ```ts
 type ActionKind =
   | 'shell.exec' | 'fs.read' | 'fs.write' | 'fs.delete'
-  | 'net.request' | 'tool.call' | 'mcp.call';
+  | 'net.request' | 'tool.call'
+  | 'mcp.tool' | 'mcp.resource' | 'mcp.prompt' | 'mcp.sample' | 'mcp.elicit';
 
 interface Action {
   id: string;                       // ULID, stable across the decision's whole lifecycle
@@ -128,6 +129,14 @@ interface Action {
   receivedAt: string;               // RFC 3339, set by the adapter
 }
 ```
+
+The five `mcp.*` kinds are deliberately not one `mcp.call` (FR-28). `tools/call`,
+`resources/read`, `prompts/get`, `sampling/createMessage` and `elicitation/create` are different
+capabilities with different blast radii — a resource read is an exfiltration path and a sampling
+request inverts control by letting the server drive agent inference — so each needs its own
+normaliser, its own rule surface, and **its own cell in the per-adapter coverage matrix**. Collapsed
+into one kind, an adapter that intercepts only `tools/call` would report `mcp.call: 'intercepted'`
+and silently give false assurance over the other four: R-04 by construction.
 
 **Responsibility**: one file per `ActionKind` normaliser plus a discriminated-union validator.
 Paths are absolute and symlink-resolved here, before any rule sees them — a rule matching
@@ -393,6 +402,8 @@ and never removed. Contrast ≥ 4.5:1 for body text in both themes.
 | FR-25 | `SessionRegistry` + `AuditRecord.override` |
 | FR-26 | `PolicyWatcher` |
 | FR-27 | `CliAdapter.uninstall` / `.isRegistered` / `.plannedChanges`, `core/audit` terminal record, daemon lifecycle |
+| FR-28 | `core/action` `mcp.*` normalisers (one per MCP request class), `CliAdapter.coverage` |
+| FR-29 | `core/content` inbound screening of MCP server responses, `mcp.sample` normaliser |
 
 ---
 

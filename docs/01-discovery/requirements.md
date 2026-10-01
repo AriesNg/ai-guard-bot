@@ -221,6 +221,16 @@ policy distribution or a team view that a single-user local tool has nowhere to 
   an MCP proxy and/or process-level interception.
 - **FR-10** The system SHALL degrade to `deny` when interception coverage for a given action
   class cannot be guaranteed, and SHALL report that gap at startup rather than silently.
+- **FR-28** The system SHALL intercept and evaluate **every MCP request class an agent can issue**,
+  not tool invocation alone: `tools/call`, `resources/read`, `prompts/get`,
+  `sampling/createMessage`, and `elicitation/create`. Each SHALL be a distinct action kind with its
+  own normaliser and its own cell in the per-adapter coverage matrix (FR-23), so that a class left
+  unintercepted fails closed under FR-10 instead of inheriting the coverage asserted for
+  `tools/call`.
+- **FR-29** The system SHALL treat content returned by an MCP server — resource contents, prompt
+  templates, and tool results — as inbound content subject to FR-14 injection screening, and SHALL
+  evaluate a `sampling/createMessage` request as an action in its own right, since it inverts
+  control by having the server drive agent inference rather than the agent drive the server.
 
 ### Evaluation
 
