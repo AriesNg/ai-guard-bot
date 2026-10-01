@@ -5,6 +5,9 @@
 **Blocking approval**: Open Questions **Q-01** (which local model) and **Q-09** (single-language
 Rust) in `requirements.md`. Q-02 … Q-08 were answered by the product owner on 2026-10-02 and are
 recorded in [`../05-adr/011-v1-scope-envelope.md`](../05-adr/011-v1-scope-envelope.md).
+**Q-10** (is a Linux-only capability admissible?) is open but **not** blocking — it gates
+[`../05-adr/012-supervised-exec-adapter.md`](../05-adr/012-supervised-exec-adapter.md) alone, which
+is post-v1.
 
 ## Purpose
 Understand the problem, users, market, and constraints before designing anything.

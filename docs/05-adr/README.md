@@ -1,6 +1,6 @@
 # 05 — Architecture Decision Records
 
-**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-011 Proposed, awaiting human review
+**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-012 Proposed, awaiting human review
 **Last updated**: 2026-10-02, after the product owner's requirements-confirmation session (recorded
 in [ADR-011](011-v1-scope-envelope.md))
 
@@ -22,6 +22,7 @@ Record every significant architectural decision with context, rationale, and rej
 | [009](009-fail-closed-default.md) | Fail-closed by default, implemented as a default value rather than a branch | Proposed | 2026-09-28 |
 | [010](010-supersede-adr-001-no-web-server-ui.md) | Supersede ADR-001 — no web-server UI; the CLI is v1's interface | Proposed — amended, Q-06 closed with a TUI | 2026-10-02 |
 | [011](011-v1-scope-envelope.md) | v1 scope envelope — platforms, adapters, interface, posture | Proposed | 2026-10-02 |
+| [012](012-supervised-exec-adapter.md) | Supervised-exec as a third adapter shape — Linux-only, declared not claimed | Proposed — **post-v1**, blocked on Q-10 | 2026-10-02 |
 
 ## Scope note on ADR-001 — superseded
 
@@ -59,6 +60,8 @@ flowchart TD
     A011 --> A007
     A011 --> A010
     A011 -.->|amendment pending| A002
+    A007 -.->|post-v1, blocked on Q-10| A012["ADR-012: Supervised-exec adapter<br/>(Linux-only, post-v1)"]
+    A008 -.->|interception, not boundary| A012
 ```
 
 ## What each ADR answers
@@ -75,16 +78,19 @@ flowchart TD
 | 009 | What happens to an action when the engine cannot evaluate it? | S-08, FR-10, Availability NFR |
 | 010 | Does the product ship a UI, and may it ship a web server to do it? | ADR-003's no-listener invariant; R-07; persona P3; Q-06 |
 | 011 | What is actually in v1 — which platforms, which adapters, which interface, enforcing from when? | The product owner's answers of 2026-10-02 |
+| 012 | How is a CLI with neither a hook interface nor MCP traffic served, and is kernel supervision that answer? | FR-09's undesigned second path; R-04 |
 
 ## Blocked on human input
 
-As of 2026-10-02, **two questions remain open** — Q-01, carried from the brief, and **Q-09**, raised
-*by* the answers. See [ADR-011](011-v1-scope-envelope.md) for the seven that were answered.
+As of 2026-10-02, **two questions block Discovery approval** — Q-01, carried from the brief, and
+**Q-09**, raised *by* the answers. **Q-10** is also open but blocks only ADR-012, which is post-v1.
+See [ADR-011](011-v1-scope-envelope.md) for the seven that were answered.
 
 | ADR | Blocked on | Effect |
 |---|---|---|
 | 005 | **Q-01** — which model is "laya"? The owner confirms it is a specific model, not a Llama-class placeholder | The runtime port and the `LocalModelRuntime` contract stand; the accuracy gate thresholds and the < 5 GB memory budget cannot be validated until the model is named |
 | 002 | **Q-09** — owner's confirmation of [ADR-011](011-v1-scope-envelope.md)'s open point: make the product single-language Rust, now that the UI is a TUI | Decides whether TypeScript, a Node runtime, and the schema-codegen build step exist at all |
+| 012 | **Q-10** — is a Linux-only capability admissible, given ADR-007 §6's complete-matrix rule and ADR-011's both-platforms-tested parity? | Does **not** block v1 or Discovery approval. A "no" closes ADR-012 as Rejected; a "yes" admits it to the post-v1 backlog with its macOS coverage row empty |
 
 Resolved: Q-02 and Q-03 (ADR-008, unblocked — Seatbelt on macOS, Landlock + seccomp + netns on
 Linux, Windows unsupported), Q-04 (ADR-007 — Claude Code adapter plus the MCP proxy), Q-05, Q-06
