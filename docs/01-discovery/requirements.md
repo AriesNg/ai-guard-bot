@@ -140,6 +140,22 @@ testable; acceptance criteria are stated where the story is not self-evidently v
   are printed; `--purge` is required to delete them and prompts for confirmation; the audit chain
   ends with a verifiable terminal record so `guard log verify` can distinguish removal from
   truncation.
+- **S-26** As a developer, I want to ask the guard *why* it decided what it decided — and whether it
+  would still decide the same way — so that a surprising denial is something I can inspect and argue
+  with rather than a verdict I have to work around.
+  *Rationale:* with enforcement on from the first action (Q-08) and fail-closed as the default
+  ([ADR-009](../05-adr/009-fail-closed-default.md)), R-01's false-deny is a *first-session* event.
+  The acceptance path for that risk — read the reason, fix the rule — assumes the decision can be
+  reconstructed. A verdict plus a one-line reason is not enough when the deciding factor was a
+  precedence comparison (a model deny over a deterministic allow), a cache hit, or an evaluator that
+  never ran.
+  *Accepts:* `guard explain <actionId>` names the deciding rule, the stages that ran, every rule that
+  matched and the precedence key that eliminated it, and the provenance in force — from the stored
+  record alone, working while the model runtime is down, in P95 < 50 ms; a fail-closed deny that no
+  rule produced explains *why nothing decided*; `guard replay` re-decides the recorded action and
+  reports identical or divergent with an attribution, exiting `4` on divergence; neither command
+  enforces, writes to the log, or warms the cache. See
+  [ADR-012](../05-adr/012-decision-trace.md), FR-30 … FR-32.
 
 ### P1 — Should Have
 
@@ -263,7 +279,8 @@ policy distribution or a team view that a single-user local tool has nowhere to 
 
 - **FR-19** The system SHALL append to an immutable local log, for every intercepted action: a
   timestamp, session id, agent identity, action type, action payload (masked per policy),
-  decision, deciding rule ids, evaluator used, and evaluation latency.
+  decision, deciding rule ids, evaluator used, and evaluation latency — **and the FR-30 decision
+  trace**, in the same record, under the same hash.
 - **FR-20** The system SHALL detect tampering with the audit log (e.g. hash-chained records) and
   report it.
 - **FR-21** The system SHALL provide query over the log by session, time range, decision, rule
@@ -272,6 +289,27 @@ policy distribution or a team view that a single-user local tool has nowhere to 
   for export to an external log pipeline.
 - **FR-23** The system SHALL expose a health check reporting engine status, model-runtime
   availability, policy version in force, and per-CLI interception coverage.
+- **FR-30** The system SHALL record, **inside the same tamper-evident record as the decision**, a
+  bounded **decision trace** sufficient to reconstruct how that decision was reached: the evaluation
+  stages that ran and in what order, every rule that matched (not only the one that won), the
+  precedence key that eliminated each losing candidate, and the **provenance** of every component
+  whose version can change an outcome — guard build, matcher set, specificity weights, policy
+  version, detector versions, and, where the model ran, model identity and weights digest. The trace
+  SHALL be produced for **every** decision, including a decision served from cache and a
+  fail-closed deny that no rule produced, with **no verbose mode, sampling, or debug level**
+  involved. It SHALL contain no matched content, no payload value, and no prompt transcript, and
+  SHALL be bounded by schema — **≤ 16 stages, ≤ 32 candidate rules, P99 ≤ 4 KB encoded, 16 KB
+  absolute** — declaring truncation and the dropped counts within the hashed bytes rather than
+  shortening silently.
+- **FR-31** The system SHALL explain any recorded decision **from the stored record alone**, without
+  consulting the live policy or the model runtime, in **P95 < 50 ms**, naming the deciding rule, the
+  comparison that produced it, and the provenance under which it was made.
+- **FR-32** The system SHALL re-evaluate a recorded action against a named policy version and report
+  whether the outcome is identical or divergent, attributing a divergence to the policy, to a
+  provenance change, or to model non-determinism — and reporting it as **unexplained** when none of
+  those account for it. Replay SHALL neither enforce, append to the log, nor populate the decision
+  cache. On the deterministic and cache paths, replay with identical provenance and policy SHALL be
+  **bit-identical**; on the model path no bitwise claim is made.
 
 ### Operation
 
@@ -349,8 +387,20 @@ policy distribution or a team view that a single-user local tool has nowhere to 
 ### Observability
 
 - Every decision emits a structured event with rule id, decision, evaluator, and latency (FR-19).
+- **Every decision carries its own reconstruction** (FR-30): stages, candidate rules, eliminating
+  precedence key, provenance. Budgets, inside the existing hot-path budgets rather than added to
+  them: trace construction **P95 < 1 ms, P99 < 2 ms**; added audit-append cost **P95 < 1 ms**;
+  encoded size **P50 ≤ 512 B, P99 ≤ 4 KB**; log growth **still < 1 GB / 30 days**, measured as a
+  release gate rather than assumed.
+- **Explain and replay are product surfaces, not debugging aids** (FR-31, FR-32): `guard explain`
+  **P95 < 50 ms** from the record alone; `guard replay` deterministic **P95 < 100 ms**, exit code `4`
+  on divergence so a determinism check is a CI job over real recorded history.
 - Metrics exposed: decisions/s by outcome, evaluator mix, P50/P95/P99 latency per evaluator,
-  model-runtime availability, policy version, denial rate per rule, override count.
+  model-runtime availability, policy version, denial rate per rule, override count, **cache-hit
+  rate, trace truncation rate, encoded-trace size P50/P99, and replay divergences by attribution**.
+- **Zero untraced decisions and zero unexplainable records** are acceptance conditions, measured the
+  same way "zero decisions unlogged" is: a decision record without a trace fails validation, and the
+  pipeline cannot produce one.
 - Health check per FR-23.
 
 ### Accessibility
@@ -418,6 +468,10 @@ the product opens no TCP port in any configuration
 - Structured denial responses the host agent can parse.
 - Outbound secret/PII masking; inbound prompt-injection screening (P1).
 - Append-only, hash-chained, queryable audit log with structured export.
+- **A decision trace inside every decision record, with `guard explain` and `guard replay`** (FR-30 …
+  FR-32, [ADR-012](../05-adr/012-decision-trace.md)). In scope for v1 rather than after it because a
+  record written without a trace can never acquire one, so shipping the log first would create a
+  permanently unexplainable era at exactly the point where the default policy is least trustworthy.
 - **A read-only TUI audit viewer** (Q-06), in-process, with no listener and no write path.
 - Dry-run mode as an **opt-in** facility, one-off interactive override, hot policy reload.
 - Single-machine, single-developer installation; **enforcing from the first action** (Q-08).
@@ -486,6 +540,11 @@ the product opens no TCP port in any configuration
 | **Coverage matrix** | Per-CLI table of which action classes are interceptable, published and asserted at startup. |
 | **Reference workload** | The fixed, recorded agent session used for all performance targets. |
 | **Evaluation corpus** | The versioned, labelled action set used to gate FR-11/FR-13 accuracy in CI. |
+| **Decision trace** | The bounded, structured record of *how* a decision was reached — stages run, rules that matched, the precedence key that eliminated each loser — stored inside the decision's own tamper-evident record (FR-30). |
+| **Provenance** | The identity and version of every component that could change an outcome: guard build, matcher set, specificity weights, policy version, detector versions, model id and weights digest (FR-30). |
+| **Precedence key** | One of the five ordered comparisons that resolve two matching rules into one decision; the trace names which key eliminated each losing candidate. |
+| **Replay** | Re-evaluating a recorded action against a named policy version to see whether today's engine still decides the same way; never enforces and never writes (FR-32). |
+| **Divergence** | A replay whose outcome differs from the record, attributed to the policy, to provenance, to model non-determinism — or **unexplained**, which is a defect. |
 
 ---
 
@@ -513,10 +572,17 @@ flowchart TD
     I -->|rejected| L
     K --> M[Execute in sandbox]
     M --> N[Inbound content screen]
-    F --> O[Audit log: append + hash-chain]
+    C --> T["Trace step appended at every stage<br/>(FR-30) — stages, candidates,<br/>eliminating precedence key, provenance"]
+    E --> T
+    G --> T
+    H --> T
+    F --> O["Audit log: append + hash-chain<br/>decision AND trace, one record, one hash"]
     L --> O
     N --> O
+    T --> O
     O --> P[Return result or denial to agent]
+    O --> Q["guard explain — from the record alone (FR-31)"]
+    O --> R["guard replay — divergence + attribution (FR-32)"]
 ```
 
 ### Context

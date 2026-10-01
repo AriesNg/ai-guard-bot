@@ -242,6 +242,7 @@ backpressure into a stampede, which is the standard way a bounded queue stops be
 | **`Finding` has no `value` field**, by construction — detector id, category and span only | [`data-model.md`](data-model.md) §4. A detector that returned matched text would put every secret it found into the audit log |
 | **Only a `RedactedAction` reaches the model** — structure, no content | [`api-design.md`](api-design.md) §7.3 |
 | **The audit log stores `MaskedPayload`**, with findings already replaced | [`data-model.md`](data-model.md) §5.1 |
+| **The decision trace carries no values either** — stages, rule ids, detector ids, spans, counts, digests and the same 200-char redacted `summary` the model saw; **no prompt transcript, no model completion, no payload content** | [`data-model.md`](data-model.md) §5.5.2; [ADR-012](../05-adr/012-decision-trace.md) item 6. The trace exists to be shared — attached to a bug report, read by an auditor — so it is held to the strictest of these rules, not the loosest |
 | **Log and policy are user-owned, `0600`**, in the user's own directories | §4.3 |
 | **Removal retains the log by default** and prints its path; `--purge` deletes it with confirmation | FR-27; [`api-design.md`](api-design.md) §4.2 |
 

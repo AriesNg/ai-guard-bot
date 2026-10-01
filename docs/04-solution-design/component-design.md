@@ -195,8 +195,17 @@ interface EvaluatorResult {
   confidence?: number;       // model only
   reason: string;            // human-readable, surfaced in the denial (FR-15)
   latencyMs: number;
+  step: TraceStep;           // FR-30 — the stage's own account of itself; not optional
+  candidates: CandidateResult[];   // every rule that matched here, winner included
 }
 ```
+
+`step` and `candidates` are **part of the return value, not a logging side-effect**
+([ADR-012](../05-adr/012-decision-trace.md)). An evaluator that produced a decision without them would
+compile but fail the pipeline invariant test, which is the point: the obligation to account for a
+decision belongs to whoever made it, and an evaluator is the only component that still knows what it
+considered. Canonical schemas for `TraceStep` and `CandidateResult`:
+[`../03-system-design/data-model.md`](../03-system-design/data-model.md) §5.5.
 
 - `DeterministicEvaluator` — pure, synchronous, no I/O. Pre-compiled matchers indexed by
   `ActionKind` so evaluation is not a linear scan over 200 rules (P95 < 20 ms).
@@ -212,6 +221,18 @@ interface EvaluatorResult {
 - `EvaluationPipeline` — orchestrates, enforces the fail-closed rule (FR-10, S-08), stamps the
   evaluator and latency onto the record, and honours dry-run by computing and logging but
   returning `allow` (FR-16).
+- `TraceBuilder` — owns the pre-sized step buffer, applies the §5.5 caps, and performs **truncation by
+  rule** (keep the winner, the earliest-key elimination, and every error/deny-producing step) with
+  `truncated` and `dropped` set inside the hashed bytes. It is the only component permitted to drop
+  anything from a trace, and it cannot drop silently (FR-30).
+- `ProvenanceStamp` — assembled once at startup and after each policy or runtime change (guard build,
+  matcher set, specificity weights, detector versions, `LocalModelRuntime.identity()`), then copied
+  onto each record. Recomputing it per decision would put a digest on the hot path for information that
+  only changes at load time.
+- `DecisionExplainer` / `DecisionReplayer` — the FR-31/FR-32 read surfaces. The explainer takes a record
+  and renders it, touching no policy and no runtime; the replayer re-runs the recorded action through
+  **the same pipeline instance type** with the audit writer and the cache writer disabled, so a replay
+  cannot write what it is inspecting.
 
 **Fail-closed is implemented as a default, not a branch** ([ADR-009](../05-adr/009-fail-closed-default.md)): the pipeline's initial decision value
 is `deny` with reason `evaluator-unavailable`, and evaluators can only replace it. There is no
@@ -270,6 +291,8 @@ interface AuditRecord {
   latencyMs: number; policyVersion: string;
   mode: 'enforcing' | 'dry-run';
   override?: { actor: string; justification: string };   // FR-25
+  trace: DecisionTrace;                    // FR-30 — required on a decision record
+  provenance: DecisionProvenance;          // FR-30 — what could change the outcome
 }
 ```
 
@@ -278,7 +301,8 @@ interface AuditRecord {
 - `AuditStore` — local embedded store with indexes on the five FR-21 query dimensions; documented
   rotation to hold the < 1 GB/30 days budget.
 - `AuditQuery` — **read-only** interface. The UI and CLI reader get only this; nothing outside
-  `AuditWriter` can write.
+  `AuditWriter` can write. Candidate-rule and provenance filters are post-index predicates over the
+  trace, documented as such ([`../03-system-design/data-model.md`](../03-system-design/data-model.md) §6.2).
 - `AuditExporter` — structured stream for an external pipeline (FR-22, S-14).
 
 ### 2.7 Daemon — `core/daemon`
@@ -404,6 +428,9 @@ and never removed. Contrast ≥ 4.5:1 for body text in both themes.
 | FR-27 | `CliAdapter.uninstall` / `.isRegistered` / `.plannedChanges`, `core/audit` terminal record, daemon lifecycle |
 | FR-28 | `core/action` `mcp.*` normalisers (one per MCP request class), `CliAdapter.coverage` |
 | FR-29 | `core/content` inbound screening of MCP server responses, `mcp.sample` normaliser |
+| FR-30 | `TraceBuilder`, `ProvenanceStamp`, every `Evaluator` (each returns its own step), `PrecedenceResolver` (returns its eliminations) |
+| FR-31 | `DecisionExplainer` + `AuditQuery` — no policy or runtime dependency |
+| FR-32 | `DecisionReplayer` over the same pipeline with the audit and cache writers disabled |
 
 ---
 

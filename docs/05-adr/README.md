@@ -1,6 +1,6 @@
 # 05 — Architecture Decision Records
 
-**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-011 Proposed, awaiting human review
+**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-012 Proposed, awaiting human review
 **Last updated**: 2026-10-02, after the product owner's requirements-confirmation session (recorded
 in [ADR-011](011-v1-scope-envelope.md))
 
@@ -22,6 +22,7 @@ Record every significant architectural decision with context, rationale, and rej
 | [009](009-fail-closed-default.md) | Fail-closed by default, implemented as a default value rather than a branch | Proposed | 2026-09-28 |
 | [010](010-supersede-adr-001-no-web-server-ui.md) | Supersede ADR-001 — no web-server UI; the CLI is v1's interface | Proposed — amended, Q-06 closed with a TUI | 2026-10-02 |
 | [011](011-v1-scope-envelope.md) | v1 scope envelope — platforms, adapters, interface, posture | Proposed | 2026-10-02 |
+| [012](012-decision-trace.md) | Every decision carries its own trace, inside the audit hash | Proposed — raised by Phase 3; blocked on neither Q-01 nor Q-09 | 2026-10-02 |
 
 ## Scope note on ADR-001 — superseded
 
@@ -59,7 +60,16 @@ flowchart TD
     A011 --> A007
     A011 --> A010
     A011 -.->|amendment pending| A002
+    A004 --> A012["ADR-012: Decision trace<br/>inside the audit hash"]
+    A006 --> A012
+    A009 --> A012
+    A012 --> A006
 ```
+
+ADR-012 is the one two-way edge in the graph, and deliberately so: it *depends* on ADR-006's record
+and chain, and it also *changes* what ADR-006's record contains. The alternative — a separate
+side-car log — was rejected in ADR-012 precisely because it would have made the dependency one-way
+at the cost of leaving the explanation outside the chain.
 
 ## What each ADR answers
 
@@ -75,6 +85,7 @@ flowchart TD
 | 009 | What happens to an action when the engine cannot evaluate it? | S-08, FR-10, Availability NFR |
 | 010 | Does the product ship a UI, and may it ship a web server to do it? | ADR-003's no-listener invariant; R-07; persona P3; Q-06 |
 | 011 | What is actually in v1 — which platforms, which adapters, which interface, enforcing from when? | The product owner's answers of 2026-10-02 |
+| 012 | The log says *what* was decided — what makes it say *how*, and how is yesterday's decision reproduced? | FR-30–FR-32, S-26; ADR-006's chain; ADR-004's precedence order |
 
 ## Blocked on human input
 
@@ -85,6 +96,13 @@ As of 2026-10-02, **two questions remain open** — Q-01, carried from the brief
 |---|---|---|
 | 005 | **Q-01** — which model is "laya"? The owner confirms it is a specific model, not a Llama-class placeholder | The runtime port and the `LocalModelRuntime` contract stand; the accuracy gate thresholds and the < 5 GB memory budget cannot be validated until the model is named |
 | 002 | **Q-09** — owner's confirmation of [ADR-011](011-v1-scope-envelope.md)'s open point: make the product single-language Rust, now that the UI is a TUI | Decides whether TypeScript, a Node runtime, and the schema-codegen build step exist at all |
+
+**ADR-012 is blocked on neither.** It treats the model's identity as a recorded *field*
+(`runtimeId`, `modelId`, `weightsDigest`) rather than a known value, so Q-01 changes what a
+provenance stamp contains but not whether one exists; and it specifies a schema and a set of
+properties, not a language, so Q-09 changes the implementation and not the decision. It can therefore
+be reviewed and accepted now, which matters because a decision record written without a trace can
+never acquire one later.
 
 Resolved: Q-02 and Q-03 (ADR-008, unblocked — Seatbelt on macOS, Landlock + seccomp + netns on
 Linux, Windows unsupported), Q-04 (ADR-007 — Claude Code adapter plus the MCP proxy), Q-05, Q-06

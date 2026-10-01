@@ -206,6 +206,16 @@ that skips the audit append. The architectural consequences:
 - Dry-run (FR-16) does **not** alter the fold. It alters only what the adapter does with the
   decision, and the audit record carries `mode: 'dry-run'` so the two are never confused in evidence.
 
+**The fold also accumulates the decision trace** ([ADR-012](../05-adr/012-decision-trace.md), FR-30).
+Each stage appends its step as it runs, so the trace is a by-product of evaluation rather than a second
+pass over it: there is no "tracing enabled" variant of the pipeline, and an evaluator that returned a
+decision without appending its step fails a pipeline invariant test. This is the same structural move as
+fail-closed — a property produced by the shape of the code rather than enforced by remembering to do it.
+Its consequence is the case that matters most: when nothing replaces the initial `deny`, the record
+still carries the step that explains **why** nothing decided — a coverage gap, an unavailable runtime, a
+hook timeout, a failed normalisation ([`data-model.md`](data-model.md) §5.5.3). A fail-closed deny with
+no account of itself would be indistinguishable, to a user, from a malfunction.
+
 ### 4.2 Evaluator ordering is a cost gradient, not a preference
 
 Ratifies [ADR-004](../05-adr/004-layered-policy-model.md). Deterministic rules run first and
@@ -215,8 +225,11 @@ classes (credential paths, destructive commands, egress) are **deterministic by 
 wrong model is never the only thing between the agent and an irreversible action.
 
 Precedence is a **fixed total order**, resolved identically by every caller (CLI simulation, daemon,
-tests). The order and its formalisation live in [`api-design.md`](api-design.md) §6; a tie that the
-relation cannot break is a **policy validation failure**, not a runtime coin-flip.
+replay, tests). The order and its formalisation live in [`api-design.md`](api-design.md) §6; a tie that
+the relation cannot break is a **policy validation failure**, not a runtime coin-flip. The resolver
+returns its comparisons as data — one entry per eliminated candidate, naming the deciding key
+([`api-design.md`](api-design.md) §6.4) — which is what lets the audit record show that a cheap layer
+was overruled rather than merely show who won.
 
 ### 4.3 The capability split
 
@@ -277,11 +290,14 @@ sequenceDiagram
     N->>C: key = hash(normalised action) + policyVersion
     alt cache hit (non-ask, non-hook, enforcing)
         C-->>P: cached decision
+        Note over P: trace step cache.hit<br/>cites reused actionId + key digest
     else miss
         P->>P: fold, initial value = deny
-        Note over P: deterministic P95 < 20 ms<br/>hook bounded timeout<br/>model P95 < 300 ms
+        Note over P: deterministic P95 < 20 ms<br/>hook bounded timeout<br/>model P95 < 300 ms<br/>each stage appends its trace step
     end
-    P->>W: append(record)
+    P->>P: resolver returns winner + eliminations (key 1…5)
+    Note over P: trace construction P95 < 1 ms<br/>inside the decision budget
+    P->>W: append(record incl. trace + provenance)
     W-->>P: durable (fsync) — P95 < 5 ms
     P-->>R: decision + ruleIds + evaluator + latencyMs
     R-->>A: decision
@@ -300,6 +316,11 @@ sequenceDiagram
 guarantee (FR-19): there is no window in which the agent has been told it may proceed but the record
 does not yet exist. It is also why the 5 ms durable-append budget is load-bearing rather than
 aspirational — it sits inside the 20 ms decision budget.
+
+**The trace is written on that same append** (FR-30), not afterwards and not elsewhere. A second write
+would reintroduce precisely the window the first one closes: a decision returned, then an explanation
+that may or may not land. One record, one fsync, one hash
+([ADR-012](../05-adr/012-decision-trace.md) item 1).
 
 ### 6.2 Content screening — the two directions are different problems
 
@@ -449,6 +470,7 @@ rather than left open:
 | 010 — no web-server UI | **Ratified.** No HTTP surface anywhere; the CORS review-criteria item is therefore N/A with reason. | §5; [`security.md`](security.md) §8 |
 | 011 — v1 scope envelope | **Ratified as the scope this design implements.** Two adapters, two platforms, enforcing from the first action, removal in the envelope. | throughout |
 | 001 — React/Next.js | Already superseded by ADR-010. **Binds nothing.** Not cited as a constraint anywhere in Phase 3. | — |
+| 012 — decision trace | **Raised by this phase and adopted into this design** (not a delegation from Phase 2): the evidence record was carrying a verdict without its grounds. The fold accumulates the trace, the resolver reports its comparisons, the runtime reports its identity, and `explain`/`replay` are product surfaces with budgets. | §4.1, §4.2, §6.1, §9; [`data-model.md`](data-model.md) §5.5; [`api-design.md`](api-design.md) §3.1, §6.4, §7.6 |
 
 **Phase 4 corrections carried here.** [`../04-solution-design/component-design.md`](../04-solution-design/component-design.md)
 §3 (web UI component tree) is withdrawn as a build target and survives only as the TUI view
@@ -496,6 +518,10 @@ each one is named in [`../04-solution-design/testing-strategy.md`](../04-solutio
 | Policy load | **< 500 ms for 200 rules** | Parse + validate + merge off the hot path; atomic swap |
 | Audit write | **P95 < 5 ms**, never blocking beyond that | Append-only segments, single writer, one fsync (§6.1) |
 | Audit query | **P95 < 1 s over 1 M records** | Indexes on the five FR-21 dimensions ([`data-model.md`](data-model.md) §6) |
+| Trace construction | **P95 < 1 ms, P99 < 2 ms** — inside the decision budget, not added to it | Steps pushed onto a pre-sized buffer during evaluation; the resolver already computes the comparisons it reports (§4.2) |
+| Explain a recorded decision | **P95 < 50 ms** | One indexed record read plus formatting; no evaluation, no policy load, works while the runtime is down |
+| Replay a recorded decision | deterministic **P95 < 100 ms**; model path inherits **P95 < 300 ms** | Same resolver and evaluators as enforcement, no audit append, no cache write |
+| Encoded trace size | **P50 ≤ 512 B, P99 ≤ 4 KB, 16 KB hard cap** | Schema-level caps (≤ 16 steps, ≤ 32 candidates); ids and enums, never content |
 | Cold start to first decision | **< 2 s excl. model runtime; < 15 s incl.** | Daemon decides on deterministic rules before the runtime is warm; model rules deny until it is |
 | Concurrent sessions | **≥ 4** | Per-session cache scope; round-robin fairness over one bounded queue |
 | Memory | **engine RSS < 250 MB; < 5 GB incl. model** | Bounded queue and bounded cache; weights outside the engine's heap |
