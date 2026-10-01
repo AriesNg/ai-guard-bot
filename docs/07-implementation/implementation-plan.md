@@ -8,9 +8,10 @@
 > [`../03-system-design/`](../03-system-design/README.md), written so the sequencing can be reviewed
 > alongside the design rather than after it. **No sprint starts before H-1 is signed off.**
 >
-> **`sprint-001-plan.md` in this folder is scaffold boilerplate** (auth, a landing page, a dashboard
-> shell) and **binds nothing**. It is not superseded by this document because it never applied; it
-> describes a different product. When Sprint 1 begins, it is replaced.
+> **[`sprint-001-plan.md`](sprint-001-plan.md) is now written** — S-0 below, expanded into ten tasks
+> with an acceptance condition and a verification command each. The scaffold boilerplate that
+> previously occupied that file (auth, a landing page, a dashboard shell) described a different
+> product, bound nothing, and has been removed rather than superseded.
 >
 > Carries assumptions **A-1 … A-3** from [`../03-system-design/architecture.md`](../03-system-design/architecture.md).
 > No build or test command exists yet; §1 S-0 is where the first one is created.
@@ -57,6 +58,26 @@ flowchart LR
 Each sprint lists: what it delivers, the design section it implements, the CI gate it turns on, and the
 **human gate** it ends at (§4). Task ids are referenced by the gate table.
 
+### 2.1 Every task is testable in its own sprint
+
+A task may not enter a sprint unless it carries a **Deliverable**, a falsifiable **Acceptance**
+condition, a **Verified by** command, and the design section it **Traces to** — and unless that
+verification can run to completion using only what *that sprint and its predecessors* have built.
+
+**No task's verification may depend on an artefact from a later sprint.** This is the rule that makes
+"independently useful" (§1) mean something: a sprint whose work can only be checked once the next one
+lands has not delivered, it has accumulated. When a task cannot meet the rule, it moves to the sprint
+where its verification is possible — **weakening the acceptance condition to fit the sprint is never
+the correct response.** Where a condition is genuinely unautomatable, it becomes a named gate in §4
+with a stated reason CI cannot answer it, not a looser test.
+
+The rule has teeth: it is what added S0-T9 to S-0 (the precedence resolver would otherwise be
+invisible until S-1) and what keeps policy **hot reload** out of S-0 while policy **validation** is in
+it — the first needs a daemon to reload into, the second is a pure offline comparison.
+
+Per-sprint plans (`sprint-NNN-plan.md`) carry the four fields per task plus a runnable demo script;
+[`sprint-001-plan.md`](sprint-001-plan.md) is the worked example.
+
 ### S-0 — Foundations: the things everything else is written against
 
 *Independently useful: `guard policy validate` runs on a policy file in CI. That alone is worth having.*
@@ -69,11 +90,20 @@ Each sprint lists: what it delivers, the design section it implements, the CI ga
 | S0-T4 | Path/argv/URL normalisation + its bypass test set (`../`, `~`, symlink, case, punycode, `sh -c`) | [`data-model.md`](../03-system-design/data-model.md) §2.3 |
 | S0-T5 | Policy schema, total validation, the seven load-time checks, content-hash versioning | [`data-model.md`](../03-system-design/data-model.md) §3 |
 | S0-T6 | **Precedence resolver + specificity index**, property-tested for totality, antisymmetry, transitivity; `POLICY_CONFLICT` on an unbreakable tie | [`api-design.md`](../03-system-design/api-design.md) §6 |
-| S0-T7 | `GuardError` closed catalogue; `guard policy validate` with exit codes `0`/`2` | [`api-design.md`](../03-system-design/api-design.md) §5, §4 |
+| S0-T7 | `GuardError` closed catalogue, with an exhaustiveness test diffing the enum against the §5 table | [`api-design.md`](../03-system-design/api-design.md) §5 |
+| S0-T8 | `guard policy validate` with exit codes `0`/`1`/`2`, `--json`, and colour-independent output | [`api-design.md`](../03-system-design/api-design.md) §4, §4.1 |
+| S0-T9 | `validate --explain` — precedence order and computed specificity, readable **without a daemon**. Added so S0-T6 is observable at H-2; a CLI-surface addition proposed, not taken ([`sprint-001-plan.md`](sprint-001-plan.md) §7) | [`api-design.md`](../03-system-design/api-design.md) §6 |
+| S0-T10 | One task-runner entry point shared by CI and developers; the `package.json` disposition settled under Q-09 | [`testing-strategy.md`](../04-solution-design/testing-strategy.md) §6 |
 
 **Gate on exit: H-2.** Nothing is mocked here that §3 of the testing strategy forbids — the precedence
 resolver and path normalisation are both on the never-mocked list, and they are both in this sprint
 deliberately: they are the two places a silent bypass is cheapest to introduce and hardest to find later.
+
+S0-T8 … S0-T10 were added when the sprint was planned in detail, for one reason each: §2.1's
+**testable-in-its-own-sprint** rule leaves S0-T6 with no human-readable output until S-1's
+`policy.simulate` exists (T9), the sprint needs a command to be independently useful at all (T8), and
+no build or test command exists in the repository yet (T10). Full acceptance criteria, the demo
+script and the H-2 protocol are in [`sprint-001-plan.md`](sprint-001-plan.md).
 
 ### S-1 — Decide, locally
 
