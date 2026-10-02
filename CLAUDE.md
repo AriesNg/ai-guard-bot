@@ -2,12 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Three files hold the repository's shared context alongside this one: `MEMORY.md` (current state
+and decisions), `LEARN.md` (lessons learned, append-only `L-NNN` entries), and
+`docs/08-maintenance/defect-log.md` (defects found, `D-NNN` records). Read them before starting
+non-trivial work — they answer what this file does not.
+
 ## What this repository is
 
-An **empty project scaffold**, not an application. `src/`, `tests/`, and `infrastructure/`
-contain only `.gitkeep` files; `package.json` has an empty `dependencies` and every script
+An **empty project scaffold**, not an application. `src/` and `infrastructure/` contain only
+`.gitkeep` files, and `tests/` holds one test — `tests/docs/verify-docs.sh`, which checks the
+documents. `package.json` has an empty `dependencies` and every script
 (`dev`, `build`, `start`, `lint`, `test`, `test:e2e`, `typecheck`) is an empty string. There
-is no lockfile, no framework installed, and it is not yet a git repository.
+is no lockfile and no framework installed. It is a git repository (default branch `master`).
 
 The substance of the repo is the **process contract** in `.ai/` and the **phase-gated document
 tree** in `docs/`. Read `.ai/instructions.md`, `.ai/workflow.md`, and `.ai/rules/*.md` before
@@ -19,10 +25,11 @@ intercepts every action, evaluates it against high-level developer-authored rule
 deterministic matchers plus a locally-run small model, and allows / masks / denies it before
 execution, logging every decision. Read the brief rather than inferring from the folder name.
 
-Six open questions at the end of the brief are still unanswered, four of which block approval:
-Q-02 (target platforms), Q-03 (threat model — an agent that errs vs one actively trying to
-escape), Q-04 (first target CLI), Q-06 (is a UI in scope for v1). Do not invent answers to these;
-where work depends on one, state the assumption explicitly.
+Most of the open questions at the end of the brief are now answered by the v1 scope
+confirmation (see "Existing decisions"): Q-02 (target platforms), Q-03 (threat model), Q-04
+(first target CLI) and Q-06 (UI scope) are settled. Two remain open and still block Discovery
+approval: Q-01 (which local model) and Q-09 (single-language Rust). Do not resolve either by
+inference; where work depends on one, state the assumption explicitly.
 
 ## Commands
 
@@ -36,16 +43,33 @@ scaffold boilerplate that used to sit there. It is **Draft and not started** —
 approval) — so the commands it names (`just test`, `guard policy validate`) describe what S1-01/S1-08
 and S1-10 will create. **They do not exist yet.**
 
-Until Sprint 1 is run, never claim a build/test command exists or invent one.
+Until Sprint 1 is run, never claim a build/test command exists or invent one. The one command
+that does exist today is `tests/docs/verify-docs.sh` — see "Every change is verified" below.
 
 ADR-011's "the team must now" list (the `CliAdapter` contract, both adapters, the two-OS CI matrix,
 the accuracy gate, the shipped default policy, clean removal) is read by `implementation-plan.md` §1
 as the **v1 release blocking set**, sequenced across S-1 … S-6 rather than crammed into Sprint 1 —
 an ADR-011 wording amendment the owner decides at H-1. Nothing in scope changes either way.
 
+## Every change is verified
+
+Every change is tested before it is committed, and a defect is raised as a record, not left as a
+chat remark or an inline `TODO`. The repository's only shipped artefact right now is its document
+tree, so the test verifies the documents.
+
+- Run `tests/docs/verify-docs.sh` before committing and confirm it passes. It checks, among other
+  things, that relative links resolve, every document carries a `**Status**`, the phase folders and
+  the ADR index match their tables, no `TODO`/`FIXME` marker survives outside inline code, no
+  document claims a command that does not exist, and `LEARN.md` / `MEMORY.md` are present.
+- A failing check is a **defect**: fix it, or raise it in `docs/08-maintenance/defect-log.md` as a
+  `D-NNN` record following `docs/08-maintenance/defect-template.md`. Do not commit with the test red.
+- When a defect generalises into a lesson, add an `L-NNN` entry to `LEARN.md`. When it changes what
+  is currently true, update `MEMORY.md`. Do all three in the same change that fixes the defect.
+
 ## The phase gate
 
-Work proceeds through seven numbered phases, each owning a folder under `docs/`:
+Work proceeds through seven numbered phases plus a maintenance folder, each owning a folder
+under `docs/`:
 
 | # | Phase | Folder |
 |---|-------|--------|
@@ -56,6 +80,11 @@ Work proceeds through seven numbered phases, each owning a folder under `docs/`:
 | 5 | ADRs | `docs/05-adr/` |
 | 6 | Infrastructure | `docs/06-infrastructure/` |
 | 7 | Implementation | `docs/07-implementation/` |
+| 8 | Maintenance | `docs/08-maintenance/` |
+
+Phase 8 is **process infrastructure**, not a gated design phase: it holds the defect log
+(`defect-log.md`) and the record template, and exists alongside phases 1–7 rather than after
+them. It has no prerequisite and no approval gate.
 
 Rules that matter in practice:
 
@@ -190,13 +219,13 @@ Practical consequences when writing or reviewing a sprint plan:
 the scaffold and is **superseded by ADR-010**. **It binds nothing** — do not treat Next.js, the
 App Router, or RSC as decided for this project, and do not cite ADR-001 as a constraint.
 
-`docs/05-adr/002` … `011` are **Proposed**, awaiting the human's review: Rust enforcement core
+`docs/05-adr/002` … `012` are **Proposed**, awaiting the human's review: Rust enforcement core
 with a TypeScript UI (002 — **amendment pending**, see below), a local daemon over a Unix socket
 with **no TCP listener in any configuration** (003), layered policy where deterministic rules decide
 before intent rules (004), a pluggable local model runtime (005), a hash-chained single-writer audit
 log (006), per-CLI adapters with a coverage matrix (007), OS-native confinement with no absolute
 isolation claim (008), fail-closed as a default value rather than a branch (009), no web-server UI
-(010), and the v1 scope envelope (011).
+(010), the v1 scope envelope (011), and the decision trace (012).
 Read `docs/05-adr/README.md` for the index and the open questions each one is blocked on.
 
 **v1 scope was confirmed with the product owner on 2026-10-02** (ADR-011). Treat these as settled
