@@ -132,7 +132,10 @@ Trade-offs accepted:
    "**Binding**: ADR-001 (Accepted)".~~ **Done 2026-10-02**, at the product owner's explicit request:
    Stack Preferences now records that no UI framework is binding, that the UI is a read-only TUI, and
    that Q-09 (single-language Rust) is open. That file is human-owned per `.ai/workflow.md`, so the
-   edit is marked as owner-requested at the foot of the file.
+   edit is marked as owner-requested at the foot of the file. **Q-09 was itself answered later the
+   same day** ([ADR-013](013-model-and-language-resolution.md)) — the brief's "Q-09 open" line is
+   now stale, but since `.ai/` is human-owned, updating it to reflect single-language Rust is
+   proposed in chat, not written here.
 4. ~~Rework `component-design.md` §3's Server-Action-based policy editor into the CLI write path~~
    **Done:** §3 is withdrawn as a build target and retained only as the TUI's view inventory;
    `state-management.md` Part B is re-based on the TUI with the policy-write flows moved to the CLI.

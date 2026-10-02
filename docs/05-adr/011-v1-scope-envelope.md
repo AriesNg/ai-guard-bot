@@ -28,7 +28,7 @@ not weigh explicitly, those are stated under Consequences and flagged, not silen
 | Q-06 | Interface | **CLI and config file, plus a TUI audit viewer** | ADR-010 item 2; no web UI, no browser, no asset-serving path. The CLI surface includes **removal** (`guard uninstall`, S-25/FR-27): with two adapters writing into host-owned config and enforcement on from the first action, reversibility is in the v1 envelope, not after it |
 | Q-07 | Timeline | **Side project, intermittent** | Sprints must each land something independently useful and survive long gaps |
 | Q-08 | Day-one posture | **Enforcing immediately** — no dry-run grace period | FR default mode; `guard dry-run` remains available voluntarily |
-| Q-01 | Local model | **Still open.** "laya" is a specific model the owner has in mind, not a Llama-class placeholder | ADR-005 stays blocked |
+| Q-01 | Local model | **Still open as of this session.** "laya" is a specific model the owner has in mind, not a Llama-class placeholder | ADR-005 stays blocked — ~~until~~ **answered later the same day**, see [ADR-013](013-model-and-language-resolution.md) |
 
 Derived decisions, following directly from the above:
 
@@ -97,9 +97,12 @@ Trade-off accepted, with a reservation recorded:
 
 **The team must now**
 
-1. **Answer Q-01.** It is the only remaining blocker, and it gates ADR-005's accuracy and memory
-   budgets.
-2. **Resolve the language question this ADR opens** — see the open point below.
+1. ~~**Answer Q-01.**~~ **Done 2026-10-02** — the model is Laya
+   ([ADR-013](013-model-and-language-resolution.md)). It gates ADR-005's accuracy and memory
+   budgets, but ADR-013 raises a new open point on how Laya is served; that is not yet settled.
+2. ~~**Resolve the language question this ADR opens**~~ **Done 2026-10-02** — single-language
+   Rust, confirmed ([ADR-013](013-model-and-language-resolution.md)). See the open point below for
+   the historical record of the recommendation; it is no longer pending.
 3. Amend ADR-008 to fix the primitive per platform now that Q-02 and Q-03 are answered, and write
    the `BoundaryDescription` for each.
 4. Re-scope `../01-discovery/requirements.md`: Windows, team distribution, and the web UI move to
@@ -123,8 +126,10 @@ recommendation is to make the product **single-language Rust**, with the TUI bui
 (`ratatui`-class) and shipped inside the same static binary. That removes a Node runtime from a
 security tool, makes the one-command install (S-09) genuinely one binary, and deletes the
 schema-codegen build step ADR-002 introduced to keep two languages in sync. ADR-002 is still
-Proposed, so this is an amendment rather than a supersession — but it is a real change and is not
-applied unilaterally.
+Proposed, so this is an amendment rather than a supersession.
+
+**Confirmed 2026-10-02, later the same day** — see [ADR-013](013-model-and-language-resolution.md).
+ADR-002 is amended accordingly.
 
 ## Rejected Alternatives
 
@@ -152,9 +157,10 @@ applied unilaterally.
 **ADR Number**: 011
 **Date**: 2026-10-02
 **Author**: Claude (draft for review by Yu Fai (Aries) Ng)
-**Related**: [ADR-002](002-enforcement-core-language.md) (its TypeScript half is now dormant) ·
-[ADR-004](004-layered-policy-model.md) · [ADR-005](005-pluggable-local-model-runtime.md) (still
-blocked on Q-01) · [ADR-007](007-cli-integration-strategy.md) (Q-04 answered) ·
+**Related**: [ADR-013](013-model-and-language-resolution.md) (Q-01 and Q-09, answered later the
+same day) · [ADR-002](002-enforcement-core-language.md) (its TypeScript half is dropped) ·
+[ADR-004](004-layered-policy-model.md) · [ADR-005](005-pluggable-local-model-runtime.md) (model
+named; serving mechanism still open) · [ADR-007](007-cli-integration-strategy.md) (Q-04 answered) ·
 [ADR-008](008-sandbox-confinement-primitive.md) (Q-02, Q-03 answered — unblocked) ·
 [ADR-010](010-supersede-adr-001-no-web-server-ui.md) (Q-06 answered; item 2 closes with a TUI) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) Q-01 … Q-08, R-01 ·
