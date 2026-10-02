@@ -340,12 +340,16 @@ asserted.
 ## 8. Blocking questions
 
 Q-02, Q-03, Q-04 and Q-06 were answered on 2026-10-02 and are reflected above
-([ADR-011](../05-adr/011-v1-scope-envelope.md)). What remains:
+([ADR-011](../05-adr/011-v1-scope-envelope.md)). Q-01 and Q-09 were answered later the same day
+([ADR-013](../05-adr/013-model-and-language-resolution.md)): the model is **Laya**, so the
+accuracy-gate corpus thresholds are now meaningful against a named baseline, and the product is
+**single-language Rust**, so there is no Vitest-side toolchain — unit/property/perf tooling is
+Rust-only. Nothing in this document is blocked any more.
 
-| # | Question | Blocks |
-|---|---|---|
-| Q-01 | Which local model | The accuracy-gate baseline: the corpus thresholds are only meaningful against a named model |
-| Q-09 / ADR-002 | Single-language Rust? | Unit/property/perf tool choices, and whether a Vitest-side toolchain exists at all |
+One narrower point stays open past this document: how Laya is served
+([ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2, raised by
+[ADR-013](../05-adr/013-model-and-language-resolution.md)). It does not change which gates exist or
+their thresholds, only the harness that produces Laya's own numbers for §2.3.
 
 **Related**: [`component-design.md`](component-design.md) ·
 [`state-management.md`](state-management.md) · [`routing.md`](routing.md) ·

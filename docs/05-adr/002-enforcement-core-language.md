@@ -1,13 +1,14 @@
 # ADR-002: Rust for the enforcement core, TypeScript for the UI
 
 ## Status
-Proposed — **amendment pending as of 2026-10-02**
+Proposed — **amended 2026-10-02: single-language Rust, confirmed**
 
-Q-06 answered with a **TUI**, not a web UI ([ADR-011](011-v1-scope-envelope.md)). That removes the
-only consumer of the TypeScript half of this split. The recommendation is now a **single-language
-Rust product** with the TUI built in-process and shipped in the same binary, which also deletes the
-schema-codegen build step below. Not applied unilaterally — awaiting the product owner's
-confirmation of ADR-011's open point.
+Q-06 answered with a **TUI**, not a web UI ([ADR-011](011-v1-scope-envelope.md)), which removed the
+only consumer of the TypeScript half of this split. **Q-09 is now answered** — the product owner
+confirmed single-language Rust on 2026-10-02 ([ADR-013](013-model-and-language-resolution.md)).
+The title is now a misnomer kept for history: there is no TypeScript layer. The TUI is built
+in-process in Rust (`ratatui`-class) and shipped in the same static binary; the schema-codegen
+build step this ADR introduced is deleted from scope, not conditionally retained.
 
 ## Context
 
@@ -37,14 +38,16 @@ The forces on that process are different in kind from the forces on a web UI:
 
 Split the stack at the wire contract:
 
-- **Enforcement core and the per-CLI adapters: Rust.** Distributed as a single static binary per
-  platform.
-- ~~**UI surface (audit viewer), if Q-06 puts one in v1: TypeScript.**~~ **Superseded by the
-  amendment above:** Q-06 answered with a TUI, so the audit viewer is in-process and in the core's
+- **Enforcement core, the per-CLI adapters, the CLI, and the TUI: Rust.** Distributed as a single
+  static binary per platform. One workspace, one type set.
+- ~~**UI surface (audit viewer), if Q-06 puts one in v1: TypeScript.**~~ **Superseded:** Q-06
+  answered with a TUI and Q-09 confirmed single-language Rust
+  ([ADR-013](013-model-and-language-resolution.md)). The audit viewer is in-process, in the core's
   language. No separate UI language, no second runtime, no generated client types.
 - **The boundary is JSON-RPC over a Unix domain socket** (ADR-003), with the JSON schemas in
-  Phase 3's `api-design.md` as the single source of truth. TypeScript types for the UI are
-  **generated** from those schemas, not hand-maintained in parallel.
+  Phase 3's `api-design.md` as the single source of truth. With no second language, these schemas
+  are documentation and wire validation, not a codegen source — the Rust `struct`/`enum` types on
+  both sides of the socket are hand-written against them, once, not generated.
 
 This ADR decides only the enforcement layer, which no earlier ADR addressed. The UI half of the
 split is now governed by [ADR-010](010-supersede-adr-001-no-web-server-ui.md).
@@ -92,17 +95,14 @@ Trade-offs accepted, stated plainly:
 
 **The team must now**
 
-1. Add a Rust workspace (`core/`, `adapters/`, and — if Q-09 confirms single-language — `tui/`),
-   with `cargo` wired into the `lint → test → build` pipeline that Sprint 1 creates. There is no
-   Next.js app to sit alongside: ADR-001 is superseded
-   ([ADR-010](010-supersede-adr-001-no-web-server-ui.md)).
-2. Make schema-driven codegen a build step with a CI check that regeneration is a no-op — **only if
-   Q-09 keeps TypeScript.** Single-language Rust deletes this step rather than automating it.
+1. Add a Rust workspace (`core/`, `adapters/`, `cli/`, `tui/`), with `cargo` wired into the
+   `lint → test → build` pipeline that Sprint 1 creates. There is no Next.js app to sit alongside:
+   ADR-001 is superseded ([ADR-010](010-supersede-adr-001-no-web-server-ui.md)).
+2. ~~Make schema-driven codegen a build step~~ **Deleted from scope.** Single-language Rust means
+   there is no second side to keep in sync.
 3. Set up cross-compilation for **macOS and Linux** (Q-02, answered 2026-10-02). No Windows target.
-4. **Resolve Q-09.** Q-06 answered with a read-only TUI rather than a web UI, so the TypeScript half
-   of this decision has no consumer and the recommendation is a single-language Rust product with the
-   TUI in-process (`ratatui`-class) in the same binary — see
-   [ADR-011](011-v1-scope-envelope.md). Pending the owner's confirmation, not applied.
+4. ~~Resolve Q-09~~ **Done.** The product owner confirmed single-language Rust on 2026-10-02 — see
+   [ADR-013](013-model-and-language-resolution.md).
 
 ## Rejected Alternatives
 
@@ -122,9 +122,12 @@ Trade-offs accepted, stated plainly:
   written in a language without memory safety. The decision is not close.
 - **Python.** Rejected outright: start-up cost, packaging, and the GIL against a concurrency
   requirement of 4 sessions.
-- **Rust everywhere, including the UI (WASM or a native GUI).** Rejected: the UI has no latency
-  budget and is out of the enforcement path, so it buys nothing, and it would narrow the hiring and
-  contribution pool for the layer where that matters least.
+- **Rust everywhere, including the UI (WASM or a native GUI), at the time this ADR was first
+  written.** Rejected then because a *web* UI's latency budget didn't need it and it would have
+  narrowed the hiring pool. Overtaken by events: Q-06 answered with a TUI rather than a web UI, so
+  the GUI framing no longer applies, and Q-09 confirmed single-language Rust
+  ([ADR-013](013-model-and-language-resolution.md)) — this alternative is what the decision became,
+  not what was rejected.
 - **A thin native adapter shelling into a Node daemon.** Considered as the compromise that keeps
   most logic in TypeScript. Rejected: it keeps the language boundary *and* the Node memory and
   start-up costs, adds a hop, and puts the policy engine — the part most needing to be fast and
@@ -134,7 +137,8 @@ Trade-offs accepted, stated plainly:
 **ADR Number**: 002
 **Date**: 2026-09-28
 **Author**: Claude (draft for review by Aries Ng)
-**Related**: [ADR-011](011-v1-scope-envelope.md) (Q-06's TUI answer makes the TS half dormant) ·
+**Related**: [ADR-013](013-model-and-language-resolution.md) (Q-09 confirmed: single-language
+Rust) · [ADR-011](011-v1-scope-envelope.md) (Q-06's TUI answer raised Q-09) ·
 [ADR-010](010-supersede-adr-001-no-web-server-ui.md) (governs the UI half; supersedes ADR-001) ·
 [ADR-003](003-local-daemon-over-unix-socket.md) ·
 [ADR-008](008-sandbox-confinement-primitive.md) ·

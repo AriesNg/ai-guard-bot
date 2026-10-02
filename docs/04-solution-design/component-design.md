@@ -436,16 +436,19 @@ and never removed. Contrast ≥ 4.5:1 for body text in both themes.
 
 ## 5. Blocking questions for this phase
 
-| # | Question | Blocks |
-|---|---|---|
 Q-02, Q-03, Q-04 and Q-06 were answered on 2026-10-02 — §2.5's primitive is Seatbelt on macOS and
 Landlock + seccomp + netns on Linux, both adapters are v1, and §3 is withdrawn in favour of a TUI
-([ADR-011](../05-adr/011-v1-scope-envelope.md)). What still blocks:
+([ADR-011](../05-adr/011-v1-scope-envelope.md)). Q-01 and Q-09 were answered later the same day
+([ADR-013](../05-adr/013-model-and-language-resolution.md)): the model is **Laya**, and the product
+is **single-language Rust** — `types/` is hand-written once, with no generation step, and
+`ModelRuntime`'s memory budget and constrained-decoding availability are evaluated against Laya's
+own published figures rather than an unnamed model. Nothing in this phase is blocked on either
+question any more.
 
-| # | Question | Blocks |
-|---|---|---|
-| Q-01 | Which local model | `ModelRuntime`'s memory budget and whether constrained decoding is available |
-| Q-09 / ADR-002 | Single-language Rust? | Build tooling, package layout, and whether `types/` is genuinely shared or generated — single-language Rust deletes the generation step entirely |
+One narrower point ADR-013 raised is still open: how Laya is served, since its only published
+runtime is Node and it is not Ollama-servable
+([ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2). It does not block this
+document — `ModelRuntime`'s port contract is the same either way.
 
 **Related**: [`state-management.md`](state-management.md) ·
 [`routing.md`](routing.md) · [`testing-strategy.md`](testing-strategy.md) ·

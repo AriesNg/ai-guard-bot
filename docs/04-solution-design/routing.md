@@ -275,15 +275,12 @@ would imply a security boundary that does not exist.
 
 ## 4. Blocking questions
 
-| # | Question | Blocks |
-|---|---|---|
 Q-02, Q-04 and Q-06 were answered on 2026-10-02: §1.1 is implemented **twice** (Claude Code hook and
 MCP proxy), the socket path convention covers **macOS and Linux only**, and §3 is withdrawn
-([ADR-011](../05-adr/011-v1-scope-envelope.md)). What still blocks:
-
-| # | Question | Blocks |
-|---|---|---|
-| Q-09 / ADR-002 | Single-language Rust? | RPC codec and whether `shared/api` needs code generation at all — one language means one hand-written type set |
+([ADR-011](../05-adr/011-v1-scope-envelope.md)). Q-09 was answered later the same day
+([ADR-013](../05-adr/013-model-and-language-resolution.md)): the product is **single-language
+Rust**, so the RPC codec and `shared/api` stay one hand-written type set with no code-generation
+step. Nothing in this document is blocked any more.
 
 **Related**: [`component-design.md`](component-design.md) ·
 [`state-management.md`](state-management.md) · [`testing-strategy.md`](testing-strategy.md) · ADRs

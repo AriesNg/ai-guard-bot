@@ -3,10 +3,12 @@
 **Status**: 🟡 Draft — awaiting review
 **Last updated**: 2026-10-02
 
-> **Phase-gate note.** The prerequisite below is **UX Design approved**; Phase 2 is ⬜ Not started and
-> Phase 1 is still Draft (Q-01 and Q-09 open). These documents were drafted ahead of that gate at the
-> product owner's explicit request — the same precedent under which Phase 4 was drafted. Each document
-> opens with the same note and the assumption table it carries. Nothing here resolves Q-01 or Q-09.
+> **Phase-gate note.** The prerequisite below is **UX Design approved**; Phase 2 is ⬜ Not started.
+> Phase 1 is now **Approved** (Q-01 and Q-09 were answered 2026-10-02 — see
+> [ADR-013](../05-adr/013-model-and-language-resolution.md)), but Phase 3's own prerequisite (UX
+> Design) is still unmet. These documents were drafted ahead of that gate at the product owner's
+> explicit request — the same precedent under which Phase 4 was drafted. Each document opens with
+> the same note and the assumption table it carries.
 
 ## Purpose
 Define the architecture, data model, APIs, and security strategy — and accept or supersede the
@@ -52,12 +54,12 @@ the audit hash (FR-30 – FR-32), with `decision.explain` and `decision.replay` 
 ([`data-model.md`](data-model.md) §5.5, [`api-design.md`](api-design.md) §4, §6.4). It is blocked on
 neither Q-01 nor Q-09.
 
-## Assumptions carried (not resolved)
+## Assumptions carried
 
-| # | Assumption | Blocking question |
+| # | Assumption | Status |
 |---|---|---|
-| A-1 | Single-language Rust; one binary for engine, CLI and TUI | **Q-09** / ADR-002 amendment |
-| A-2 | The local model is unnamed; no accuracy, memory or context figure is asserted for it | **Q-01** / ADR-005 |
+| A-1 | Single-language Rust; one binary for engine, CLI and TUI | **Confirmed 2026-10-02** — Q-09 / [ADR-013](../05-adr/013-model-and-language-resolution.md) |
+| A-2 | The local model is **Laya**; no accuracy, memory or context figure in this document has been re-derived from its own published numbers yet, and its serving mechanism (ADR-005 item 2) is still open | **Named 2026-10-02** — Q-01 / [ADR-013](../05-adr/013-model-and-language-resolution.md); **partially resolved** |
 | A-3 | TypeScript interface syntax is schema notation only | — |
 
 The architectural delta for each resolution is stated in [`architecture.md`](architecture.md) §8, so

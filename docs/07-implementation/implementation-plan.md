@@ -93,7 +93,7 @@ Per-sprint plans (`sprint-NNN-plan.md`) carry the four fields per task plus a ru
 | S0-T7 | `GuardError` closed catalogue, with an exhaustiveness test diffing the enum against the §5 table | [`api-design.md`](../03-system-design/api-design.md) §5 |
 | S0-T8 | `guard policy validate` with exit codes `0`/`1`/`2`, `--json`, and colour-independent output | [`api-design.md`](../03-system-design/api-design.md) §4, §4.1 |
 | S0-T9 | `validate --explain` — precedence order and computed specificity, readable **without a daemon**. Added so S0-T6 is observable at H-2; a CLI-surface addition proposed, not taken ([`sprint-001-plan.md`](sprint-001-plan.md) §7). Distinct from `guard explain`, which explains a *recorded decision* rather than a policy's shape | [`api-design.md`](../03-system-design/api-design.md) §6 |
-| S0-T10 | One task-runner entry point shared by CI and developers; the `package.json` disposition settled under Q-09 | [`testing-strategy.md`](../04-solution-design/testing-strategy.md) §6 |
+| S0-T10 | One task-runner entry point shared by CI and developers; the `package.json` disposition settled by Q-09's answer — single-language Rust, see [ADR-013](../05-adr/013-model-and-language-resolution.md) — so there is no separate Node toolchain to reconcile | [`testing-strategy.md`](../04-solution-design/testing-strategy.md) §6 |
 
 **Gate on exit: H-2.** Nothing is mocked here that §3 of the testing strategy forbids — the precedence
 resolver and path normalisation are both on the never-mocked list, and they are both in this sprint
@@ -220,8 +220,12 @@ contract was right by being the second implementation of it.*
 
 **CI gate turned on: accuracy — a release blocker, not a target** (R-01, ADR-011: enforcing from the
 first action means there is no observation period in which false denies are harmless).
-**Gate on exit: H-9 and H-10.** Requires **Q-01 answered** (A-2): the runtime port can be built without
-it, the gate cannot be *met* without it.
+**Gate on exit: H-9 and H-10.** **Q-01 is answered** (A-2): the model is **Laya**
+([ADR-013](../05-adr/013-model-and-language-resolution.md)). The runtime port could already be
+built without that answer; the accuracy gate still could not be *met* without it, and still cannot
+be met today — how Laya is served is a narrower open point ADR-013 raised
+([ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2), and the corpus thresholds in
+S6-T6 are not yet re-derived from Laya's own published figures.
 
 ### S-7 — Surfaces
 
@@ -285,7 +289,7 @@ and the three recurring reasons a human is genuinely required are —
 
 | # | Gate | When | What the human does | Why CI cannot | Time | Exit condition |
 |---|---|---|---|---|---|---|
-| **H-1** | **Phase 3 approval** | **Now — blocks everything** | Read the four Phase 3 documents; accept or correct the ADR disposition table; **answer or explicitly defer Q-01 and Q-09**; accept or correct assumptions A-1/A-2 | Judgment. Design review has no automated form, and A-1/A-2 are owner decisions this plan refuses to infer | 2–3 h | Phase 3 marked Approved; ADRs 002–012 moved to Accepted; the ADR-011 Sprint-1 wording decision in §1 taken |
+| **H-1** | **Phase 3 approval** | **Now — blocks everything** | Read the four Phase 3 documents; accept or correct the ADR disposition table; ~~answer or explicitly defer Q-01 and Q-09~~ **done 2026-10-02 — [ADR-013](../05-adr/013-model-and-language-resolution.md)**; accept or correct assumptions A-1/A-2 | Judgment. Design review has no automated form, and A-1/A-2 are owner decisions this plan refuses to infer | 2–3 h | Phase 3 marked Approved; ADRs 002–012 moved to Accepted; the ADR-011 Sprint-1 wording decision in §1 taken |
 | **H-2** | **Policy language is writable by a human** | End of S-0 | Write five real rules in the policy format **without reading the schema**, then check `guard policy validate`'s errors are actionable | Perception. A schema can be valid and unwritable; S-01's premise is "five lines of English", which only a person attempting it can falsify | 1 h | Five rules written unaided; every validation error says what to do, not just what is wrong |
 | **H-3** | **Denial message quality** | End of S-1 | Read 20 denials, half deliberately false. For each: can you tell *which rule*, *why*, and *what to do instead*? | Perception. CI asserts the rule id is present; only a person can judge whether the sentence is usable mid-task — and S-04/R-01 turn on exactly that | 1 h | Every denial names the rule and a remedy; no denial requires reading the policy file to understand |
 | **H-4** | **Evidence is answerable** | End of S-2 | Pick three questions a developer would really ask ("what touched my `.env` yesterday?") and answer them with `guard log` only. **Then take one denial you disagree with and run `guard explain` on it**: does the rendered trace tell you which rule won, what else matched, and why the others lost — without opening the policy file? | Judgment. CI tests that the query returns rows and that the trace contains its fields; it cannot tell whether the rows answer a human's question, or whether a list of eliminations reads as an *explanation* rather than a dump | 1 h | All three answered without a second tool and without reading raw segment files; the explanation of a contested denial is understood without reference to the policy, and `guard replay` on it exits `0` |
@@ -319,7 +323,7 @@ and the three recurring reasons a human is genuinely required are —
 
 ```mermaid
 flowchart TD
-    H1["H-1 Phase 3 approval<br/>+ answer Q-01, Q-09"] --> S0(("S-0"))
+    H1["H-1 Phase 3 approval<br/>(Q-01, Q-09 answered — ADR-013)"] --> S0(("S-0"))
     S0 --> H2["H-2 policy writable"]
     H2 --> S1(("S-1")) --> H3["H-3 denial quality"]
     H3 --> S2(("S-2")) --> H4["H-4 evidence answerable"]
@@ -344,8 +348,8 @@ flowchart TD
 | # | Dependency | Effect if unmet |
 |---|---|---|
 | D-1 | **H-1** (Phase 3 approval) | Nothing starts |
-| D-2 | **Q-01** answered (the local model) | S-6's accuracy gate cannot be *met*; S-0 … S-5 are unaffected, which is why intent rules are sequenced last |
-| D-3 | **Q-09** answered (single-language Rust) | S-0's workspace layout and S-7's TUI artefact. Deciding it before S-0 avoids a rework; the delta is in [`architecture.md`](../03-system-design/architecture.md) §8 |
+| D-2 | **Q-01** answered (the local model) — **done 2026-10-02, [ADR-013](../05-adr/013-model-and-language-resolution.md): the model is Laya** | S-6's accuracy gate still cannot be *met* until Laya's serving mechanism is chosen ([ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2); S-0 … S-5 are unaffected, which is why intent rules are sequenced last |
+| D-3 | **Q-09** answered (single-language Rust) — **done 2026-10-02, [ADR-013](../05-adr/013-model-and-language-resolution.md)** | S-0's workspace layout and S-7's TUI artefact are built as one Rust binary from the start; the delta that deciding it late would have cost is in [`architecture.md`](../03-system-design/architecture.md) §8 |
 | D-4 | Recorded host payloads from both CLIs | S-3/S-5 fixtures. Must be captured from real sessions — a hand-written fixture tests our idea of the host, which is what R-05 says will drift |
 | D-5 | macOS **and** Linux CI runners on real kernels | S-4's boundary claims are unpublishable without them; a containerised fake would make §2 of `security.md` false exactly where it matters |
 | D-6 | Real recorded sessions for PR-T2 | The default policy cannot be measured, and R-01's primary mitigation is unverified |

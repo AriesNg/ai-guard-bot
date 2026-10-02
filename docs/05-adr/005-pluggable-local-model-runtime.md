@@ -5,9 +5,18 @@ Proposed
 
 ## Context
 
-The intent layer (ADR-004) needs a small model running locally. The brief names "laya"/"jev",
-read as a small model in the Llama/Gemma/Qwen class, and records the exact choice as an open
-question (Q-01). What is *not* open:
+The intent layer (ADR-004) needs a small model running locally. The brief names "laya"/"jev" and
+records the exact choice as an open question (Q-01). **Q-01 is now answered**
+([ADR-013](013-model-and-language-resolution.md), 2026-10-02): the model is **Laya**, Convai
+Innovations' open-source "System 1 decision model"
+([github.com/receptron/laya](https://github.com/receptron/laya)) — not a chat/completion LLM in
+the Llama/Gemma/Qwen class this ADR originally assumed. It takes a state and returns calibrated
+probabilities over `choice`, `score`, and `noul` (yes/no) questions; ONNX weights, ≈ 1.7 GB fp32,
+Apache-2.0; the only published runtime is an MIT-licensed Node.js/TypeScript wrapper
+(`onnxruntime-node`, Node 20+), budgeting ≈ 2 GB resident RAM and reporting ≈ 140 ms for a
+3-question call on warm Apple-silicon CPU. That naming raises a serving-mechanism question this
+ADR had not anticipated — see the amendment note on decision item 2 below; it is **not yet
+resolved**. What is *not* open, regardless of how that resolves:
 
 - **No network in the decision path** (FR-12, Privacy NFR). The model runs on the machine.
 - **P95 < 300 ms, P99 < 800 ms** for a model-path decision, on a laptop also running an IDE and the
@@ -25,7 +34,14 @@ question (Q-01). What is *not* open:
 1. **Abstract the runtime behind a `LocalModelRuntime` port.** The evaluator depends on the port,
    never on a specific server, API shape, or model.
 2. **Default to an Ollama-class local server** for v1, selected because it is the lowest-friction
-   thing to provision in `guard install`. The concrete default model is deferred to Q-01.
+   thing to provision in `guard install`. The concrete default model was deferred to Q-01 — now
+   answered as **Laya**, which is not Ollama-servable (ONNX weights with a bespoke
+   pre/post-processing contract, not a GGUF chat model). **This item is unamended pending the
+   owner's choice between [ADR-013](013-model-and-language-resolution.md)'s two options (a) keep
+   an Ollama-servable model and treat "Laya" as intent, or (b) embed Laya specifically via the
+   `ort` crate with a from-scratch Rust reimplementation of its pre/post-processing, amending both
+   this item and Rejected Alternative #3 below.** Do not read this item as resolved by Q-01's
+   answer.
 3. **Constrained decoding, always.** The model's output is confined to a small schema — a
    `DecisionKind` enum, a confidence number, and a reason string. The model cannot emit a command,
    a path, a tool name, or anything the engine would act upon.
@@ -99,8 +115,10 @@ Trade-offs accepted:
 
 **The team must now**
 
-1. Answer **Q-01** — this ADR is approvable without it, but the accuracy and memory numbers are not
-   verifiable until a concrete pairing is named.
+1. ~~Answer Q-01~~ **Done** — the model is Laya ([ADR-013](013-model-and-language-resolution.md)).
+   The accuracy and memory numbers are still not verifiable until the serving-mechanism open point
+   in decision item 2 is settled: Laya's own ≈ 2 GB / ≈ 140 ms figures only apply under option (b)
+   (embedded `ort`); an Ollama-servable substitute under option (a) would need its own numbers.
 2. Define the constrained-decoding schema in Phase 3's `api-design.md` and make rejection of a
    runtime that cannot honour it a startup check.
 3. Build the recorded-response stub alongside the first real integration (not after).
@@ -121,11 +139,12 @@ Trade-offs accepted:
   explicitly forbids a hard dependency on one model, and the field moves fast enough that this
   choice would be wrong within a release or two.
 - **Embedding an inference library directly in the daemon** (llama.cpp-class, linked in). Removes
-  the external process and the install dependency, and would lower latency. Rejected for v1: it
-  puts model-format compatibility, GPU/accelerator handling, and update cadence inside our binary,
-  which is a large maintenance surface for a latency gain that the ≥ 80 % no-model share already
-  makes uncritical. Worth revisiting if the install dependency proves to be the main adoption
-  blocker.
+  the external process and the install dependency, and would lower latency. Rejected for v1
+  *as a general policy*: it puts model-format compatibility, GPU/accelerator handling, and update
+  cadence inside our binary, which is a large maintenance surface for a latency gain that the
+  ≥ 80 % no-model share already makes uncritical. **Reopened as option (b) for Laya specifically**
+  by [ADR-013](013-model-and-language-resolution.md), since Laya's only published runtime is Node
+  and single-language Rust (Q-09) now forecloses running it there — not yet decided.
 - **Free-text model output parsed with a regex or a JSON-repair pass.** More flexible, gives richer
   reasons. Rejected outright: it reopens the possibility of the model emitting something the engine
   acts on, and a repair pass on adversarially-shaped output is a vulnerability, not a convenience.
@@ -142,6 +161,8 @@ Trade-offs accepted:
 **ADR Number**: 005
 **Date**: 2026-09-28
 **Author**: Claude (draft for review by Aries Ng)
-**Related**: [ADR-004](004-layered-policy-model.md) · [ADR-009](009-fail-closed-default.md) ·
+**Related**: [ADR-013](013-model-and-language-resolution.md) (Q-01 answered: the model is Laya;
+decision item 2's serving mechanism still open) · [ADR-004](004-layered-policy-model.md) ·
+[ADR-009](009-fail-closed-default.md) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-11–FR-14, Q-01 ·
 [`../04-solution-design/state-management.md`](../04-solution-design/state-management.md) §A.5

@@ -5,8 +5,10 @@
 **Approved by**: _pending_
 
 > **Phase-gate note.** `docs/03-system-design/README.md` names **UX Design approved** as this
-> phase's prerequisite. Phase 2 is **⬜ Not started** and Phase 1 is still **Draft** (Q-01 and Q-09
-> open). This document is drafted ahead of that gate at the product owner's explicit request —
+> phase's prerequisite. Phase 2 is **⬜ Not started**; Phase 1 is now **Approved** (Q-01 and Q-09
+> answered 2026-10-02 — [ADR-013](../05-adr/013-model-and-language-resolution.md)), but that does
+> not satisfy *this* phase's own prerequisite. This document is drafted ahead of that gate at the
+> product owner's explicit request —
 > the same precedent under which Phase 4 was drafted. Two consequences, stated rather than absorbed:
 >
 > 1. **No UX artefact is cited as settled.** Where a decision here touches the interface, it rests
@@ -23,8 +25,8 @@
 
 | # | Assumption | Source | Status |
 |---|---|---|---|
-| **A-1** | The product is **single-language Rust**: enforcement core, CLI and TUI are one binary, one type set, no Node runtime shipped. | Q-09 / [ADR-002](../05-adr/002-enforcement-core-language.md) amendment pending; [ADR-011](../05-adr/011-v1-scope-envelope.md) recommends it | **Assumed.** Open question. |
-| **A-2** | The local model is **unnamed** in this document. No accuracy figure, memory figure, context length or quantisation is asserted for it. | Q-01 / [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) | **Deliberately unresolved.** |
+| **A-1** | The product is **single-language Rust**: enforcement core, CLI and TUI are one binary, one type set, no Node runtime shipped. | Q-09 / [ADR-013](../05-adr/013-model-and-language-resolution.md), amending [ADR-002](../05-adr/002-enforcement-core-language.md) | **Confirmed 2026-10-02.** |
+| **A-2** | The local model is **Laya** (ONNX, `choice`/`score`/`noul`, not a chat LLM). No figure in this document is yet re-derived from Laya's own published numbers, and its serving mechanism is open. | Q-01 / [ADR-013](../05-adr/013-model-and-language-resolution.md), raising an open point on [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2 | **Named 2026-10-02; serving mechanism still open.** |
 | **A-3** | TypeScript interface syntax is used throughout Phases 3 and 4 as **schema notation**, not as an implementation-language commitment. Under A-1 these become Rust `struct`/`enum` with `serde`. | Editorial | Notation only. |
 
 ---
@@ -251,10 +253,10 @@ This is why audit tampering is an adversarial-gate case rather than an access-co
 | Layer | Technology | Rationale |
 |---|---|---|
 | Enforcement core | **Rust** (2021 edition or later), single static binary | [ADR-002](../05-adr/002-enforcement-core-language.md). No GC pauses inside a P99 < 50 ms budget; the OS confinement primitives are C ABIs reached without an extra FFI boundary; one artefact to install and remove. |
-| CLI + TUI | **Rust**, same binary (A-1) | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md), [ADR-011](../05-adr/011-v1-scope-envelope.md). A read-only TUI leaves TypeScript with no consumer; one language means one hand-written type set and no codegen step (see Q-09, §8). |
+| CLI + TUI | **Rust**, same binary (A-1) | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md), [ADR-013](../05-adr/013-model-and-language-resolution.md). A read-only TUI leaves TypeScript with no consumer; one language means one hand-written type set and no codegen step. |
 | IPC | **JSON-RPC 2.0 over a Unix domain socket**, mode `0600` | [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md). Filesystem permissions are the authentication; no TCP listener in any configuration, which makes the Privacy NFR inspectable. JSON keeps the wire human-auditable at a cost the budgets absorb (§6). |
 | Policy format | **Declarative text (TOML or YAML), user-owned, git-committable** | FR-04/FR-05: policy must be reviewable in a pull request and validated in CI (`guard policy validate`, exit `2`). The exact surface is fixed in [`data-model.md`](data-model.md) §3. |
-| Model runtime | **Pluggable `LocalModelRuntime` port**, constrained decoding, model unnamed (A-2) | [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). Q-01 is open; the port exists so the choice is late-bound and a recorded-response stub serves tests deterministically. |
+| Model runtime | **Pluggable `LocalModelRuntime` port**, constrained decoding, model named as Laya but its serving mechanism open (A-2) | [ADR-005](../05-adr/005-pluggable-local-model-runtime.md), [ADR-013](../05-adr/013-model-and-language-resolution.md). The port exists so the choice is late-bound and a recorded-response stub serves tests deterministically regardless of how item 2 resolves. |
 | Confinement | **OS-native**: Seatbelt / `sandbox_init` (macOS); Landlock + seccomp-bpf + network namespace (Linux) | [ADR-008](../05-adr/008-sandbox-confinement-primitive.md). A hand-rolled boundary would be a new attack surface claiming to be a mitigation. **Windows unsupported and no Windows boundary claim is published.** |
 | Audit store | **Embedded, append-only, hash-chained segments**; engine chosen against a measured benchmark | [ADR-006](../05-adr/006-audit-log-integrity.md). Selection criteria and the benchmark that decides it are in [`data-model.md`](data-model.md) §6 — the P95 < 5 ms durable-append budget is the gate, not a preference between libraries. |
 | Service management | **launchd user agent** (macOS) / **systemd user unit** (Linux) | Per-user, no root. Owned by `install`/`uninstall` and torn down **last** ([ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) item 7). |
@@ -459,7 +461,7 @@ rather than left open:
 
 | ADR | Disposition | Phase 3 obligation discharged in |
 |---|---|---|
-| 002 — Rust core | **Ratified, with the Q-09 amendment assumed** (A-1): single-language Rust, one binary, one type set. If Q-09 resolves the other way, §8 names the delta. | §3.3, §5 |
+| 002 — Rust core | **Ratified, with the Q-09 amendment confirmed** (A-1): single-language Rust, one binary, one type set — [ADR-013](../05-adr/013-model-and-language-resolution.md). | §3.3, §5 |
 | 003 — local daemon over UDS | **Ratified.** The socket path is treated as part of the threat model, not an implementation detail. | §3.1, §6.5; [`security.md`](security.md) §4.2 |
 | 004 — layered policy evaluation | **Ratified.** The **specificity relation** the total order depends on is formalised rather than asserted. | [`api-design.md`](api-design.md) §6 |
 | 005 — pluggable local model runtime | **Ratified.** The **constrained-decoding schema** is defined, and a runtime that cannot honour it is **rejected at startup** rather than trusted and parsed defensively. | [`api-design.md`](api-design.md) §7 |
@@ -481,24 +483,39 @@ rather than illustrative.
 
 ---
 
-## 8. What changes if the open questions resolve differently
+## 8. What the open-question resolutions changed, and what is still open
 
-Neither question is answered here. Both are named with their architectural delta so that resolving
-them is an edit, not a redesign.
+Both questions this section used to treat as live hypotheticals were answered by the product owner
+on 2026-10-02 ([ADR-013](../05-adr/013-model-and-language-resolution.md)). This section now records
+what that answer confirmed, kept as a historical note of the delta this document would otherwise
+have absorbed, plus the one narrower point ADR-013 left open.
 
-**Q-09 — not single-language Rust** (A-1 falsified): a TypeScript consumer returns, and with it a
-second type set for the RPC surface. The delta is confined to three things — the wire types become
-**generated** from one source of truth instead of hand-written; the TUI becomes a separate process
-and artefact, so `install`/`uninstall` place and remove two files; and the version-skew guarantee in
-§3.3 (an adapter can never be newer than the engine) must become an **explicit handshake** in
-`session.open` rather than a property of shared compilation. Nothing in §4 or §6 changes.
+**Q-09 — single-language Rust, confirmed** (A-1 confirmed, not falsified): the TypeScript-consumer
+branch this section used to describe did not happen. The wire types stay **hand-written** in one
+language; the TUI stays in the same process and binary as the engine, so `install`/`uninstall` place
+and remove one file, not two; and the version-skew guarantee in §3.3 (an adapter can never be newer
+than the engine) remains a property of shared compilation rather than needing an explicit handshake
+in `session.open`. Nothing in §4 or §6 changes from what is already written there.
 
-**Q-01 — the local model** (A-2 still open): the choice affects only `ModelEvaluator`'s behind-the-port
-details. It **cannot** affect the architecture, because the constrained-decoding schema
+**Q-01 — the local model is Laya** (A-2 named, partially resolved): naming the model does not by
+itself change the architecture, because the constrained-decoding schema
 ([`api-design.md`](api-design.md) §7) and the rejection-at-startup rule make the port's contract
-independent of the model. What it *does* gate: the resident-memory NFR (< 5 GB including the model),
-the warm-up figure inside the < 15 s cold start, and the accuracy corpus's achievable headroom
-against FR-11. No number in this document is derived from a model identity.
+independent of model identity. What naming Laya *does* gate: the resident-memory NFR (< 5 GB
+including the model), the warm-up figure inside the < 15 s cold start, and the accuracy corpus's
+achievable headroom against FR-11 — none of those numbers in this document has yet been re-derived
+from Laya's own published figures (≈1.7 GB fp32 ONNX weights; ≈140 ms warm for a 3-question batch on
+Apple-silicon CPU), and that re-derivation is still pending.
+
+**Still open: how Laya is served.** Laya's only published runtime is Node/TypeScript, and it is an
+ONNX classifier rather than a chat model, so it is not Ollama-servable — in tension with both the
+single-language-Rust confirmation above and this document's "default to an Ollama-class local
+server" framing of decision item 2 ([ADR-005](../05-adr/005-pluggable-local-model-runtime.md)).
+ADR-013 names two resolutions without choosing one: (a) keep an Ollama-servable substitute model,
+treating "Laya" as describing the intent rather than the binary; or (b) embed the `ort` crate (Rust
+ONNX Runtime bindings) plus a from-scratch Rust reimplementation of Laya's pre/post-processing,
+in-process, no Node anywhere. Whichever is chosen, the `ModelEvaluator` port and the
+constrained-decoding schema this document already specifies do not change — only what sits behind
+the port does.
 
 ---
 
