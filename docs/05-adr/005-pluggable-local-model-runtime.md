@@ -14,9 +14,10 @@ the Llama/Gemma/Qwen class this ADR originally assumed. It takes a state and ret
 probabilities over `choice`, `score`, and `noul` (yes/no) questions; ONNX weights, ≈ 1.7 GB fp32,
 Apache-2.0; the only published runtime is an MIT-licensed Node.js/TypeScript wrapper
 (`onnxruntime-node`, Node 20+), budgeting ≈ 2 GB resident RAM and reporting ≈ 140 ms for a
-3-question call on warm Apple-silicon CPU. That naming raises a serving-mechanism question this
-ADR had not anticipated — see the amendment note on decision item 2 below; it is **not yet
-resolved**. What is *not* open, regardless of how that resolves:
+3-question call on warm Apple-silicon CPU. That naming raised a serving-mechanism question this
+ADR had not anticipated, and a reason-string mismatch (Laya generates no free text at all) —
+both **resolved 2026-10-04** by [ADR-014](014-laya-serving-resolution.md); see the amended
+decision items 2, 3, and 6 below. What was never open, regardless of how those resolved:
 
 - **No network in the decision path** (FR-12, Privacy NFR). The model runs on the machine.
 - **P95 < 300 ms, P99 < 800 ms** for a model-path decision, on a laptop also running an IDE and the
@@ -33,18 +34,22 @@ resolved**. What is *not* open, regardless of how that resolves:
 
 1. **Abstract the runtime behind a `LocalModelRuntime` port.** The evaluator depends on the port,
    never on a specific server, API shape, or model.
-2. **Default to an Ollama-class local server** for v1, selected because it is the lowest-friction
-   thing to provision in `guard install`. The concrete default model was deferred to Q-01 — now
-   answered as **Laya**, which is not Ollama-servable (ONNX weights with a bespoke
-   pre/post-processing contract, not a GGUF chat model). **This item is unamended pending the
-   owner's choice between [ADR-013](013-model-and-language-resolution.md)'s two options (a) keep
-   an Ollama-servable model and treat "Laya" as intent, or (b) embed Laya specifically via the
-   `ort` crate with a from-scratch Rust reimplementation of its pre/post-processing, amending both
-   this item and Rejected Alternative #3 below.** Do not read this item as resolved by Q-01's
-   answer.
-3. **Constrained decoding, always.** The model's output is confined to a small schema — a
-   `DecisionKind` enum, a confidence number, and a reason string. The model cannot emit a command,
-   a path, a tool name, or anything the engine would act upon.
+2. **Serve Laya through its own reference server, provisioned and supervised as a local sidecar
+   process — not Ollama, not embedded in the Rust binary.** *(Amended by
+   [ADR-014](014-laya-serving-resolution.md), 2026-10-04 — superseding the Ollama-class default
+   below, which was written before the model was named.)* `guard install` provisions Laya's
+   reference server the way it would have provisioned Ollama; `guardd` talks to it as a concrete
+   implementation of the `LocalModelRuntime` port over loopback HTTP. ~~Default to an Ollama-class
+   local server for v1, selected because it is the lowest-friction thing to provision in `guard
+   install`.~~
+3. **Constrained decoding, always — and for Laya specifically, no free-text channel exists to
+   constrain.** *(Amended by [ADR-014](014-laya-serving-resolution.md): Laya is non-autoregressive
+   and emits only typed, calibrated probabilities, never generated text. The evaluator asks one
+   `noul` yes/no question per candidate intent rule and templates the reason string itself from
+   whichever rule(s) crossed threshold — the model never produces the reason.)* The model's output
+   is confined to a small schema — a `DecisionKind` enum, a confidence number, and (engine-composed,
+   not model-generated) a reason string. The model cannot emit a command, a path, a tool name, or
+   anything the engine would act upon.
 4. **Model input is framed as untrusted data.** The action and the intent rules are passed in
    clearly delimited, explicitly-untrusted regions; the model is never given instructions sourced
    from the content it is judging.
@@ -53,7 +58,9 @@ resolved**. What is *not* open, regardless of how that resolves:
    free-text fallback path.
 6. **Bounded work queue with a fixed worker count** sized to the runtime, round-robin across
    sessions. Queue wait and inference time are recorded separately so a latency regression is
-   attributable.
+   attributable. *(Amended by [ADR-014](014-laya-serving-resolution.md): each decision's per-rule
+   `noul` checks are issued to Laya as one batched call, never one call per rule — batched
+   per-question cost, not single-question cost, is what the P95 budget below was checked against.)*
 7. **A recorded-response stub** implements the same port for integration tests; the real runtime is
    exercised only in the accuracy and performance gates.
 8. **The model is never the sole gate on a catastrophic action** — guaranteed by ADR-004, restated
@@ -91,8 +98,9 @@ Trade-offs accepted:
 - **A port is an abstraction over things that differ meaningfully** — tokenisation, context
   windows, constrained-decoding support. The port will leak, and capability probing at startup is
   required rather than optional.
-- **Ollama as the default adds an external dependency to the install path**, which is a real
-  failure surface for S-09's 5-minute budget.
+- **A sidecar server as the default adds an external dependency to the install path** (Laya's
+  reference server in place of Ollama, per [ADR-014](014-laya-serving-resolution.md)), which is a
+  real failure surface for S-09's 5-minute budget.
 - **Accuracy is model-specific.** The FR-11 numbers are a property of the pairing, so the corpus
   must be re-run on any model change; swapping models is not a free configuration change.
 
@@ -116,9 +124,11 @@ Trade-offs accepted:
 **The team must now**
 
 1. ~~Answer Q-01~~ **Done** — the model is Laya ([ADR-013](013-model-and-language-resolution.md)).
-   The accuracy and memory numbers are still not verifiable until the serving-mechanism open point
-   in decision item 2 is settled: Laya's own ≈ 2 GB / ≈ 140 ms figures only apply under option (b)
-   (embedded `ort`); an Ollama-servable substitute under option (a) would need its own numbers.
+   ~~The accuracy and memory numbers are still not verifiable until the serving-mechanism open
+   point in decision item 2 is settled~~ **Done** — served via its own sidecar
+   ([ADR-014](014-laya-serving-resolution.md)). Laya's published figures are still only
+   secondary-source estimates; ADR-014 requires re-measuring them directly against the package at
+   the start of S-6, before the performance-gate baseline (#5 below) is recorded.
 2. Define the constrained-decoding schema in Phase 3's `api-design.md` and make rejection of a
    runtime that cannot honour it a startup check.
 3. Build the recorded-response stub alongside the first real integration (not after).
@@ -143,11 +153,17 @@ Trade-offs accepted:
   *as a general policy*: it puts model-format compatibility, GPU/accelerator handling, and update
   cadence inside our binary, which is a large maintenance surface for a latency gain that the
   ≥ 80 % no-model share already makes uncritical. **Reopened as option (b) for Laya specifically**
-  by [ADR-013](013-model-and-language-resolution.md), since Laya's only published runtime is Node
-  and single-language Rust (Q-09) now forecloses running it there — not yet decided.
+  by [ADR-013](013-model-and-language-resolution.md) (embed `ort` plus a from-scratch Rust
+  reimplementation of Laya's pre/post-processing), and **rejected again, finally, by
+  [ADR-014](014-laya-serving-resolution.md)** in favour of running Laya's own reference server as
+  a sidecar — the maintenance-surface argument against embedding applies just as much to
+  reimplementing Laya's pre/post-processing from scratch as it did to the original llama.cpp case.
 - **Free-text model output parsed with a regex or a JSON-repair pass.** More flexible, gives richer
   reasons. Rejected outright: it reopens the possibility of the model emitting something the engine
   acts on, and a repair pass on adversarially-shaped output is a vulnerability, not a convenience.
+  Laya's actual output has no free-text channel at all to parse — [ADR-014](014-laya-serving-resolution.md)
+  templates the reason from the engine's own rule text instead, which is this rejection's logic
+  taken to its conclusion rather than an exception to it.
 - **Retrying on malformed output until it parses.** Rejected: it converts a deny into an eventual
   allow given enough attempts, silently inverting the fail-closed posture, and it blows the latency
   budget while doing so.
@@ -161,8 +177,9 @@ Trade-offs accepted:
 **ADR Number**: 005
 **Date**: 2026-09-28
 **Author**: Claude (draft for review by Aries Ng)
-**Related**: [ADR-013](013-model-and-language-resolution.md) (Q-01 answered: the model is Laya;
-decision item 2's serving mechanism still open) · [ADR-004](004-layered-policy-model.md) ·
+**Related**: [ADR-013](013-model-and-language-resolution.md) (Q-01 answered: the model is Laya) ·
+[ADR-014](014-laya-serving-resolution.md) (decision item 2's serving mechanism resolved) ·
+[ADR-004](004-layered-policy-model.md) ·
 [ADR-009](009-fail-closed-default.md) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-11–FR-14, Q-01 ·
 [`../04-solution-design/state-management.md`](../04-solution-design/state-management.md) §A.5

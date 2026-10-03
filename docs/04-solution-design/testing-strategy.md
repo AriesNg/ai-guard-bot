@@ -346,10 +346,12 @@ accuracy-gate corpus thresholds are now meaningful against a named baseline, and
 **single-language Rust**, so there is no Vitest-side toolchain — unit/property/perf tooling is
 Rust-only. Nothing in this document is blocked any more.
 
-One narrower point stays open past this document: how Laya is served
-([ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2, raised by
-[ADR-013](../05-adr/013-model-and-language-resolution.md)). It does not change which gates exist or
-their thresholds, only the harness that produces Laya's own numbers for §2.3.
+The narrower point ADR-013 raised — how Laya is served
+([ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2) — is resolved by
+[ADR-014](../05-adr/014-laya-serving-resolution.md), 2026-10-04: `laya-serve` as a local sidecar,
+reasons templated from per-rule `noul` checks, batched per decision. It does not change which gates
+exist or their thresholds, only the harness that produces Laya's own numbers for §2.3 — and that
+harness is built against the sidecar, not re-litigated when S-6 is planned in detail.
 
 **Related**: [`component-design.md`](component-design.md) ·
 [`state-management.md`](state-management.md) · [`routing.md`](routing.md) ·
