@@ -55,10 +55,13 @@ validation, precedence resolver, closed error catalogue — shipped behind one r
 **Exit gate**: **H-2** — a human writes five real rules without reading the schema.
 **Blockers**:
 - **H-1** — Phase 3 approval. Nothing starts before it.
-- **Q-09** (single-language Rust?) — carried as assumption **A-4**; answering it before S1-01 avoids
-  roughly half a day of rework and touches no other task.
 - **§7 of the sprint plan** — `validate --explain` is a proposed CLI-surface addition awaiting a
   decision at H-1.
+
+~~**Q-09** (single-language Rust?) — carried as assumption **A-4**~~ **Resolved 2026-10-02** —
+single-language Rust, confirmed ([ADR-013](../05-adr/013-model-and-language-resolution.md)). This
+line was written before that ADR merged; left struck through rather than deleted so the sprint log
+shows what changed underneath it.
 
 *Not blocking*: **Q-01** (which local model). Nothing in Sprint 1 touches the model runtime.
 

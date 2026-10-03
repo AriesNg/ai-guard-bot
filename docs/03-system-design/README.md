@@ -59,7 +59,7 @@ neither Q-01 nor Q-09.
 | # | Assumption | Status |
 |---|---|---|
 | A-1 | Single-language Rust; one binary for engine, CLI and TUI | **Confirmed 2026-10-02** — Q-09 / [ADR-013](../05-adr/013-model-and-language-resolution.md) |
-| A-2 | The local model is **Laya**; no accuracy, memory or context figure in this document has been re-derived from its own published numbers yet, and its serving mechanism (ADR-005 item 2) is still open | **Named 2026-10-02** — Q-01 / [ADR-013](../05-adr/013-model-and-language-resolution.md); **partially resolved** |
+| A-2 | The local model is **Laya**, served via its own `laya-serve` sidecar (ADR-005 item 2); no accuracy, memory or context figure in this document has been re-derived from a measured baseline yet — still secondary-source estimates pending S-6 | **Named 2026-10-02, served via sidecar resolved 2026-10-04** — Q-01 / [ADR-013](../05-adr/013-model-and-language-resolution.md), [ADR-014](../05-adr/014-laya-serving-resolution.md) |
 | A-3 | TypeScript interface syntax is schema notation only | — |
 
 The architectural delta for each resolution is stated in [`architecture.md`](architecture.md) §8, so

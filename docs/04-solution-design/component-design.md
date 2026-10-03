@@ -445,10 +445,11 @@ is **single-language Rust** — `types/` is hand-written once, with no generatio
 own published figures rather than an unnamed model. Nothing in this phase is blocked on either
 question any more.
 
-One narrower point ADR-013 raised is still open: how Laya is served, since its only published
-runtime is Node and it is not Ollama-servable
-([ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2). It does not block this
-document — `ModelRuntime`'s port contract is the same either way.
+One narrower point ADR-013 raised — how Laya is served, since its only published runtime is Node
+and it is not Ollama-servable — is resolved by
+[ADR-014](../05-adr/014-laya-serving-resolution.md), 2026-10-04: Laya runs via its own
+`laya-serve` reference server as a provisioned local sidecar. It never blocked this document —
+`ModelRuntime`'s port contract is the same either way.
 
 **Related**: [`state-management.md`](state-management.md) ·
 [`routing.md`](routing.md) · [`testing-strategy.md`](testing-strategy.md) ·

@@ -1,7 +1,7 @@
 # 03 — System Design: Architecture
 
 **Status**: Draft
-**Last updated**: 2026-10-02
+**Last updated**: 2026-10-04 — A-2 and §8 updated for [ADR-014](../05-adr/014-laya-serving-resolution.md)'s resolution of the Laya-serving open point
 **Approved by**: _pending_
 
 > **Phase-gate note.** `docs/03-system-design/README.md` names **UX Design approved** as this
@@ -26,7 +26,7 @@
 | # | Assumption | Source | Status |
 |---|---|---|---|
 | **A-1** | The product is **single-language Rust**: enforcement core, CLI and TUI are one binary, one type set, no Node runtime shipped. | Q-09 / [ADR-013](../05-adr/013-model-and-language-resolution.md), amending [ADR-002](../05-adr/002-enforcement-core-language.md) | **Confirmed 2026-10-02.** |
-| **A-2** | The local model is **Laya** (ONNX, `choice`/`score`/`noul`, not a chat LLM). No figure in this document is yet re-derived from Laya's own published numbers, and its serving mechanism is open. | Q-01 / [ADR-013](../05-adr/013-model-and-language-resolution.md), raising an open point on [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2 | **Named 2026-10-02; serving mechanism still open.** |
+| **A-2** | The local model is **Laya** (ONNX, `choice`/`score`/`noul`, not a chat LLM), served via its own `laya-serve` reference server as a provisioned local sidecar. No figure in this document is yet re-derived from Laya's own measured numbers — ADR-014 treats the published figures as secondary-source estimates pending re-measurement at S-6. | Q-01 / [ADR-013](../05-adr/013-model-and-language-resolution.md); serving mechanism resolved by [ADR-014](../05-adr/014-laya-serving-resolution.md) | **Named 2026-10-02; serving mechanism resolved 2026-10-04.** |
 | **A-3** | TypeScript interface syntax is used throughout Phases 3 and 4 as **schema notation**, not as an implementation-language commitment. Under A-1 these become Rust `struct`/`enum` with `serde`. | Editorial | Notation only. |
 
 ---
@@ -256,7 +256,7 @@ This is why audit tampering is an adversarial-gate case rather than an access-co
 | CLI + TUI | **Rust**, same binary (A-1) | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md), [ADR-013](../05-adr/013-model-and-language-resolution.md). A read-only TUI leaves TypeScript with no consumer; one language means one hand-written type set and no codegen step. |
 | IPC | **JSON-RPC 2.0 over a Unix domain socket**, mode `0600` | [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md). Filesystem permissions are the authentication; no TCP listener in any configuration, which makes the Privacy NFR inspectable. JSON keeps the wire human-auditable at a cost the budgets absorb (§6). |
 | Policy format | **Declarative text (TOML or YAML), user-owned, git-committable** | FR-04/FR-05: policy must be reviewable in a pull request and validated in CI (`guard policy validate`, exit `2`). The exact surface is fixed in [`data-model.md`](data-model.md) §3. |
-| Model runtime | **Pluggable `LocalModelRuntime` port**, constrained decoding, model named as Laya but its serving mechanism open (A-2) | [ADR-005](../05-adr/005-pluggable-local-model-runtime.md), [ADR-013](../05-adr/013-model-and-language-resolution.md). The port exists so the choice is late-bound and a recorded-response stub serves tests deterministically regardless of how item 2 resolves. |
+| Model runtime | **Pluggable `LocalModelRuntime` port**, constrained decoding (Laya's own output has no free-text channel to constrain), model named as Laya and served via its own `laya-serve` sidecar (A-2) | [ADR-005](../05-adr/005-pluggable-local-model-runtime.md), [ADR-013](../05-adr/013-model-and-language-resolution.md), [ADR-014](../05-adr/014-laya-serving-resolution.md). The port exists so the choice is late-bound and a recorded-response stub serves tests deterministically regardless of how the model is served. |
 | Confinement | **OS-native**: Seatbelt / `sandbox_init` (macOS); Landlock + seccomp-bpf + network namespace (Linux) | [ADR-008](../05-adr/008-sandbox-confinement-primitive.md). A hand-rolled boundary would be a new attack surface claiming to be a mitigation. **Windows unsupported and no Windows boundary claim is published.** |
 | Audit store | **Embedded, append-only, hash-chained segments**; engine chosen against a measured benchmark | [ADR-006](../05-adr/006-audit-log-integrity.md). Selection criteria and the benchmark that decides it are in [`data-model.md`](data-model.md) §6 — the P95 < 5 ms durable-append budget is the gate, not a preference between libraries. |
 | Service management | **launchd user agent** (macOS) / **systemd user unit** (Linux) | Per-user, no root. Owned by `install`/`uninstall` and torn down **last** ([ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) item 7). |
@@ -483,12 +483,14 @@ rather than illustrative.
 
 ---
 
-## 8. What the open-question resolutions changed, and what is still open
+## 8. What the open-question resolutions changed, and what is left open
 
 Both questions this section used to treat as live hypotheticals were answered by the product owner
-on 2026-10-02 ([ADR-013](../05-adr/013-model-and-language-resolution.md)). This section now records
-what that answer confirmed, kept as a historical note of the delta this document would otherwise
-have absorbed, plus the one narrower point ADR-013 left open.
+on 2026-10-02 ([ADR-013](../05-adr/013-model-and-language-resolution.md)). The narrower point that
+answer raised — how Laya is served — was itself resolved by the owner on 2026-10-04
+([ADR-014](../05-adr/014-laya-serving-resolution.md)). This section now records what those answers
+confirmed, kept as a historical note of the delta this document would otherwise have absorbed. No
+open point remains.
 
 **Q-09 — single-language Rust, confirmed** (A-1 confirmed, not falsified): the TypeScript-consumer
 branch this section used to describe did not happen. The wire types stay **hand-written** in one
@@ -497,25 +499,30 @@ and remove one file, not two; and the version-skew guarantee in §3.3 (an adapte
 than the engine) remains a property of shared compilation rather than needing an explicit handshake
 in `session.open`. Nothing in §4 or §6 changes from what is already written there.
 
-**Q-01 — the local model is Laya** (A-2 named, partially resolved): naming the model does not by
-itself change the architecture, because the constrained-decoding schema
-([`api-design.md`](api-design.md) §7) and the rejection-at-startup rule make the port's contract
-independent of model identity. What naming Laya *does* gate: the resident-memory NFR (< 5 GB
-including the model), the warm-up figure inside the < 15 s cold start, and the accuracy corpus's
-achievable headroom against FR-11 — none of those numbers in this document has yet been re-derived
-from Laya's own published figures (≈1.7 GB fp32 ONNX weights; ≈140 ms warm for a 3-question batch on
-Apple-silicon CPU), and that re-derivation is still pending.
+**Q-01 — the local model is Laya** (A-2, named 2026-10-02, serving mechanism resolved 2026-10-04):
+naming the model does not by itself change the architecture, because the constrained-decoding
+schema ([`api-design.md`](api-design.md) §7) and the rejection-at-startup rule make the port's
+contract independent of model identity. What naming Laya *does* gate: the resident-memory NFR
+(< 5 GB including the model), the warm-up figure inside the < 15 s cold start, and the accuracy
+corpus's achievable headroom against FR-11 — none of those numbers in this document has yet been
+re-derived from a measured baseline (the ≈1.7 GB fp32 ONNX weights and ≈140 ms warm 3-question
+batch figure are secondary-source estimates, per [ADR-014](../05-adr/014-laya-serving-resolution.md)),
+and that re-derivation is deferred to the start of S-6, not before.
 
-**Still open: how Laya is served.** Laya's only published runtime is Node/TypeScript, and it is an
-ONNX classifier rather than a chat model, so it is not Ollama-servable — in tension with both the
-single-language-Rust confirmation above and this document's "default to an Ollama-class local
-server" framing of decision item 2 ([ADR-005](../05-adr/005-pluggable-local-model-runtime.md)).
-ADR-013 names two resolutions without choosing one: (a) keep an Ollama-servable substitute model,
-treating "Laya" as describing the intent rather than the binary; or (b) embed the `ort` crate (Rust
-ONNX Runtime bindings) plus a from-scratch Rust reimplementation of Laya's pre/post-processing,
-in-process, no Node anywhere. Whichever is chosen, the `ModelEvaluator` port and the
+**Resolved: how Laya is served.** Laya's only published Node/TypeScript wrapper, and its shape as
+an ONNX classifier rather than a chat model, put it in tension with both the single-language-Rust
+confirmation above and this document's original "default to an Ollama-class local server" framing
+of decision item 2 ([ADR-005](../05-adr/005-pluggable-local-model-runtime.md)). ADR-013 named two
+resolutions without choosing one — (a) an Ollama-servable substitute, or (b) embedding `ort` plus a
+from-scratch Rust reimplementation of Laya's pre/post-processing — and
+[ADR-014](../05-adr/014-laya-serving-resolution.md) took neither: it runs Laya's own Python
+reference server (`laya-serve`) as a provisioned local sidecar over loopback HTTP, which needs no
+Node and no Rust reimplementation of Laya's internals. The `ModelEvaluator` port and the
 constrained-decoding schema this document already specifies do not change — only what sits behind
-the port does.
+the port does. ADR-014 also replaced the model-generated reason string with one the engine
+templates from whichever per-rule `noul` check(s) crossed threshold, and requires every decision's
+rule-checks to be batched into a single call to `laya-serve` to stay inside the P95/P99 budget on
+CPU-only hardware.
 
 ---
 
