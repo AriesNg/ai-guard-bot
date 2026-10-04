@@ -235,6 +235,11 @@ policy distribution or a team view that a single-user local tool has nowhere to 
   one exists, and SHALL NOT require a fork or patch of the host agent.
 - **FR-09** The system SHALL expose the same policy engine to CLIs lacking such an interface via
   an MCP proxy and/or process-level interception.
+  **v1 satisfies the MCP-proxy half only.** Process-level interception is undesigned for v1 and
+  deferred to [ADR-015](../05-adr/015-supervised-exec-adapter.md) (post-v1, Linux-only, blocked on
+  Q-10). The gap this leaves is explicit: a host CLI offering **neither** a hook interface **nor**
+  MCP traffic has no interception point, so every action class is `unavailable` and FR-10 denies all
+  of them — such a host is **unservable in v1**, not partially served.
 - **FR-10** The system SHALL degrade to `deny` when interception coverage for a given action
   class cannot be guaranteed, and SHALL report that gap at startup rather than silently.
 - **FR-28** The system SHALL intercept and evaluate **every MCP request class an agent can issue**,
@@ -640,7 +645,10 @@ Per `.ai/rules/review-criteria.md`:
 - [x] Q-01 and Q-09 answered by the product owner later the same day — recorded in
       [ADR-013](../05-adr/013-model-and-language-resolution.md).
 
-**Approved 2026-10-02.** All eight Open Questions are answered; none block.
+**Approved 2026-10-02.** All eight Open Questions are answered; none block. A ninth, **Q-10** (is
+a Linux-only capability admissible?), was raised in design review the same day and is open but
+**not** blocking — it gates [ADR-015](../05-adr/015-supervised-exec-adapter.md) alone, which is
+post-v1.
 
 ---
 
@@ -652,7 +660,15 @@ owner on 2026-10-02** — seven in the requirements-confirmation session recorde
 day, recorded in [ADR-013](../05-adr/013-model-and-language-resolution.md). None block Discovery
 approval. ADR-013 raised one narrower open point of its own — how Laya is served — which the
 owner resolved on 2026-10-04 ([ADR-014](../05-adr/014-laya-serving-resolution.md)); it never
-blocked Discovery, only the finalizing of ADR-005 item 2.
+blocked Discovery, only the finalizing of ADR-005 item 2. A ninth question, **Q-10**, was raised in
+design review on 2026-10-02 and is open but non-blocking — it gates only
+[ADR-015](../05-adr/015-supervised-exec-adapter.md), which is post-v1.
+
+### Open
+
+| # | Question | Why it blocks |
+|---|---|---|
+| **Q-10** | **Is a Linux-only capability admissible?** FR-09 offers "an MCP proxy **and/or** process-level interception", but the only mechanism that can review an action pre-execution at the kernel's own interface is `seccomp` user notification on Linux; macOS's equivalent (Endpoint Security `AUTH` events) needs an Apple-granted entitlement and answers under a kernel deadline. So the second half of FR-09 is buildable on one v1 platform and not the other. Recommendation: **no for v1**, defensible post-v1 as matrix-declared defence in depth with the macOS row empty. | **Does not block approval of this document.** It gates [ADR-015](../05-adr/015-supervised-exec-adapter.md) only, and tests whether ADR-007 §6's "do not advertise support on an incomplete matrix" rule tolerates a platform-asymmetric capability at all. A "no" closes ADR-015 as Rejected. |
 
 ### Answered 2026-10-02 (afternoon)
 
@@ -682,5 +698,6 @@ blocked Discovery, only the finalizing of ADR-005 item 2.
 - [`../05-adr/011-v1-scope-envelope.md`](../05-adr/011-v1-scope-envelope.md) — the confirmation session of 2026-10-02 that answered Q-02 … Q-08, and the consequences of each answer
 - [`../05-adr/013-model-and-language-resolution.md`](../05-adr/013-model-and-language-resolution.md) — the same day's later session that answered Q-01 and Q-09, and the serving-mechanism open point it raises
 - [`../05-adr/010-supersede-adr-001-no-web-server-ui.md`](../05-adr/010-supersede-adr-001-no-web-server-ui.md) — supersedes ADR-001; the UI constraints that make a TUI the answer to Q-06
-- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-013 (Proposed), which answer the architectural questions these requirements raise; the index's "Blocked on human input" table now lists only ADR-005 item 2's serving mechanism
+- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-015 (Proposed), which answer the architectural questions these requirements raise; no ADR blocks Discovery or ADR approval any longer, and Q-10 blocks only [ADR-015](../05-adr/015-supervised-exec-adapter.md), which is post-v1
+- [`../05-adr/015-supervised-exec-adapter.md`](../05-adr/015-supervised-exec-adapter.md) — why FR-09's "process-level interception" clause is undesigned in v1, and the gap that leaves: a host CLI with neither hooks nor MCP traffic has no interception point, so under FR-10 every action it attempts is denied
 - [`../04-solution-design/`](../04-solution-design/) — Phase 4 documents, drafted ahead of the Phase 3 gate (see the note at the top of each)

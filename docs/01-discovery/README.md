@@ -12,6 +12,10 @@ the same day and are recorded in
 That ADR raised one narrower open point of its own (how Laya is served), resolved 2026-10-04 in
 [`../05-adr/014-laya-serving-resolution.md`](../05-adr/014-laya-serving-resolution.md) — it never
 reopened Discovery, which only required the model to be *named*.
+A ninth question, **Q-10** (is a Linux-only capability admissible?), was raised in design review
+on 2026-10-02, after this phase's approval; it is open but **not** blocking — it gates
+[`../05-adr/015-supervised-exec-adapter.md`](../05-adr/015-supervised-exec-adapter.md) alone, which
+is post-v1.
 
 ## Purpose
 Understand the problem, users, market, and constraints before designing anything.

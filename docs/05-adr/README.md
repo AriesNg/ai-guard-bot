@@ -1,9 +1,11 @@
 # 05 — Architecture Decision Records
 
-**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-014 Proposed, awaiting human review
-**Last updated**: 2026-10-04, after the product owner resolved ADR-013's open point on how Laya is
-served (recorded in [ADR-014](014-laya-serving-resolution.md)) and confirmed ADR-011 item 7's
-wording — following the Q-01/Q-09 resolution session of 2026-10-02
+**Status**: 🟡 Draft — ADR-001 **Superseded** by ADR-010; ADR-002 … ADR-015 Proposed, awaiting human review
+**Last updated**: 2026-10-04 — merged in [ADR-015](015-supervised-exec-adapter.md) (supervised-exec
+adapter, post-v1, blocked on Q-10) and the matching split in ADR-008's Rejected Alternatives,
+alongside the product owner's resolution of ADR-013's open point on how Laya is served (recorded
+in [ADR-014](014-laya-serving-resolution.md)) and confirmation of ADR-011 item 7's wording —
+following the Q-01/Q-09 resolution session of 2026-10-02
 ([ADR-013](013-model-and-language-resolution.md)) and the earlier requirements-confirmation
 session the same day (recorded in [ADR-011](011-v1-scope-envelope.md))
 
@@ -28,6 +30,7 @@ Record every significant architectural decision with context, rationale, and rej
 | [012](012-decision-trace.md) | Every decision carries its own trace, inside the audit hash | Proposed — raised by Phase 3; blocked on neither Q-01 nor Q-09 | 2026-10-02 |
 | [013](013-model-and-language-resolution.md) | Laya named as the local model; single-language Rust confirmed | Proposed — records the product owner's resolution session; the open point it raised on how Laya is served is resolved by [014](014-laya-serving-resolution.md) | 2026-10-02 |
 | [014](014-laya-serving-resolution.md) | Laya served via its own `laya-serve` sidecar; reasons templated from per-rule checks | Proposed — records the product owner's resolution session | 2026-10-04 |
+| [015](015-supervised-exec-adapter.md) | Supervised-exec as a third adapter shape — Linux-only, declared not claimed | Proposed — **post-v1**, blocked on Q-10 | 2026-10-02 |
 
 ## Scope note on ADR-001 — superseded
 
@@ -75,6 +78,8 @@ flowchart TD
     A006 --> A012
     A009 --> A012
     A012 --> A006
+    A007 -.->|post-v1, blocked on Q-10| A015["ADR-015: Supervised-exec adapter<br/>(Linux-only, post-v1)"]
+    A008 -.->|interception, not boundary| A015
 ```
 
 ADR-012 is the one two-way edge in the graph, and deliberately so: it *depends* on ADR-006's record
@@ -99,10 +104,11 @@ at the cost of leaving the explanation outside the chain.
 | 012 | The log says *what* was decided — what makes it say *how*, and how is yesterday's decision reproduced? | FR-30–FR-32, S-26; ADR-006's chain; ADR-004's precedence order |
 | 013 | Which model is "laya," and does the product collapse to one language now that the UI is a TUI? | Q-01, Q-09 |
 | 014 | How is Laya served without a Node runtime, and where does a denial's reason string come from if Laya emits no free text? | ADR-013's open point; FR-11–FR-14; the P95/P99 latency budget |
+| 015 | How is a CLI with neither a hook interface nor MCP traffic served, and is kernel supervision that answer? | FR-09's undesigned second path; R-04 |
 
 ## Blocked on human input
 
-**As of 2026-10-04, no open question remains — Discovery-level or ADR-level.** Q-02 … Q-08 were
+**As of 2026-10-04, no question blocks Discovery or ADR approval.** Q-02 … Q-08 were
 answered in the product owner's confirmation session ([ADR-011](011-v1-scope-envelope.md)); Q-01
 and Q-09, the two that session left open, were answered later the same day
 ([ADR-013](013-model-and-language-resolution.md)): the model is **Laya**, and the product is
@@ -115,8 +121,15 @@ batched into one call. [ADR-011](011-v1-scope-envelope.md) item 7's wording (Spr
 vs. v1 release blocker sequenced across the pre-release sprints) was confirmed the same session —
 see that ADR's Decision section.
 
-**No ADR is currently blocked on an unanswered question.** ADR-012 was never blocked on either:
-it treats the model's identity as a recorded *field* (`runtimeId`, `modelId`, `weightsDigest`)
+**One question is open but blocks nothing current: Q-10** — is a Linux-only capability admissible
+under ADR-007 §6's complete-matrix rule and ADR-011's both-platforms-tested parity? It was raised
+in design review on 2026-10-02 alongside [ADR-015](015-supervised-exec-adapter.md), and it gates
+only that ADR, which is itself post-v1 and already gated behind the `CliAdapter` contract being
+proven by the two v1 adapters first. A "no" closes ADR-015 as Rejected; a "yes" admits it to the
+post-v1 backlog with its macOS coverage row left empty rather than optimistic.
+
+**No other ADR is currently blocked on an unanswered question.** ADR-012 was never blocked on
+either: it treats the model's identity as a recorded *field* (`runtimeId`, `modelId`, `weightsDigest`)
 rather than a known value, so naming Laya changes what a provenance stamp contains but not
 whether one exists; and it specifies a schema and a set of properties, not a language, so the
 Rust decision changes the implementation and not the decision.
@@ -128,7 +141,8 @@ serving-mechanism/reason-string/batching open point ADR-013 raised (ADR-014).
 
 Phase 3 approval (gate **H-1**, `../07-implementation/implementation-plan.md`) is the one
 remaining step, and it is a human sign-off action rather than a further open question: the owner
-reads the four Phase 3 documents and the ADR disposition table and accepts or corrects them.
+reads the four Phase 3 documents and the ADR disposition table and accepts or corrects them. Q-10
+does not feed into H-1 either — it blocks only the post-v1 ADR-015.
 
 ## Template
 See `.ai/templates/adr.md`. Every ADR records **Rejected Alternatives**, not just the decision.
