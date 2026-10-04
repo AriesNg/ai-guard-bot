@@ -31,6 +31,10 @@ erDiagram
     ACTION ||--|| DECISION : "resolves to"
     DECISION }o--o{ RULE : "cited by ruleIds"
     DECISION ||--|| AUDIT_RECORD : "is recorded as"
+    AUDIT_RECORD ||--|| DECISION_TRACE : "embeds (inside the hash)"
+    DECISION_TRACE ||--o{ TRACE_STEP : "ordered steps"
+    DECISION_TRACE ||--o{ CANDIDATE_RESULT : "matched, won or eliminated"
+    CANDIDATE_RESULT }o--|| RULE : "is a result of"
     AUDIT_RECORD }o--|| POLICY_VERSION : "was decided under"
     AUDIT_RECORD ||--o| AUDIT_RECORD : "prevHash — chain"
     POLICY_VERSION ||--o{ RULE : "contains"
@@ -83,6 +87,27 @@ erDiagram
         string type "deterministic | intent"
         string decision "allow | deny | ask | mask"
         int specificity "derived, §4 of api-design.md"
+    }
+    DECISION_TRACE {
+        int traceVersion "1 — bumped only by an ADR"
+        string winnerRuleId "nullable — null means nothing decided"
+        bool truncated
+        int totalLatencyMs
+        json provenance "guard build, matcher set, weights digest, §5.5"
+    }
+    TRACE_STEP {
+        int index PK "produced order; never re-sorted"
+        string stage "cache | coverage | normalisation | deterministic | hook | model | content | precedence | default"
+        string outcome
+        int latencyMs
+    }
+    CANDIDATE_RESULT {
+        string ruleId FK
+        string source "deterministic | hook | model | default"
+        string decision "allow | deny | ask | mask"
+        int specificity
+        bool won
+        int eliminatedAtKey "1..5, nullable — api-design.md §6.1"
     }
     AUDIT_SEGMENT {
         string segmentId PK
@@ -368,8 +393,18 @@ interface AuditRecord {
   findings?: Finding[];             // detector id + category + span; never a value
   override?: { actor: string; justification: string };   // FR-25
   removal?: { adaptersRemoved: string[]; purge: boolean };  // guard.removed only, FR-27
+
+  // how it was reached — §5.5, FR-30. Required on recordKind 'decision'.
+  trace: DecisionTrace;
+  provenance: DecisionProvenance;
 }
 ```
+
+`trace` and `provenance` are **not optional on a decision record**. A record whose `recordKind` is
+`decision` and whose `trace` is absent is malformed, which is what makes "every decision is
+explainable" a schema property rather than an aspiration ([ADR-012](../05-adr/012-decision-trace.md)
+item 2). `override`, `policy.transition` and `guard.removed` records carry `provenance` and omit
+`trace`, because no evaluation happened.
 
 ### 5.2 The chain, and what verification can conclude
 
@@ -405,6 +440,15 @@ order and no optional-field ambiguity (an absent optional is encoded distinctly 
 Without a canonical encoding, "the same record" could hash two ways and verification would be
 decorative.
 
+Because the record now nests (`trace`, `provenance`, §5.5), the canonical encoding rules are stated
+for nested values too, not just flat ones: **arrays are encoded in their produced order and never
+sorted** (the trace's step order *is* information), nested objects follow the same fixed field order
+as the top level, and an empty array is encoded distinctly from an absent one. The encoder is on the
+never-mocked list and is property-tested for round-trip stability across platforms, because a
+canonicalisation bug in a nested field would present as `AUDIT_CHAIN_BROKEN` on a log nobody tampered
+with — the worst failure this product can produce, since it would teach the user to disbelieve the
+chain.
+
 ### 5.3 Segments and rotation
 
 ```ts
@@ -438,6 +482,117 @@ outcomes (the human's answer is not a property of the action), hook decisions (a
 state the engine cannot see), and anything in dry-run mode. The cache is **scoped per session**, so
 one session cannot inherit another's decisions. Detail:
 [`../04-solution-design/state-management.md`](../04-solution-design/state-management.md) §A.3.
+
+**A cache hit still produces a full record with a full trace** ([ADR-012](../05-adr/012-decision-trace.md)
+item 8). The trace's first step is `cache.hit`, citing the `actionId` whose decision is being reused
+and the `cacheKeyDigest`; the reused decision's own `ruleIds` and `evaluator` are copied onto the new
+record, so a cached allow is never distinguishable from an evaluated one in enforcement terms and is
+always distinguishable in evidence terms.
+
+---
+
+### 5.5 The decision trace — FR-30, and the schema that makes a decision reconstructible
+
+Canonical schema for [ADR-012](../05-adr/012-decision-trace.md). The design constraint is that the
+trace is **bounded by the schema, not by the policy's size**: every list has a cap, every entry is ids
+and enums, and no entry carries matched content.
+
+```ts
+interface DecisionTrace {
+  traceVersion: 1;                        // schema version; bumped only by an ADR
+  steps: TraceStep[];                     // produced order, <= 16; never re-sorted
+  candidates: CandidateResult[];          // every result that matched, winner included, <= 32
+  winner: { ruleId: string | null; stepIndex: number };  // null = nothing decided (fail-closed deny)
+  truncated: boolean;
+  dropped?: { steps: number; candidates: number };       // present iff truncated
+  totalLatencyMs: number;                 // equals AuditRecord.latencyMs; restated inside the hash
+}
+
+type TraceStep =
+  | { stage: 'cache';         outcome: 'hit' | 'miss'; reusedActionId?: string; cacheKeyDigest: string; latencyMs: number }
+  | { stage: 'coverage';      outcome: 'intercepted' | 'gap'; kind: ActionKind; latencyMs: number }
+  | { stage: 'normalisation'; outcome: 'ok' | 'failed'; failureCode?: string; latencyMs: number }
+  | { stage: 'deterministic'; rulesConsidered: number; rulesMatched: string[]; shortCircuited: boolean; latencyMs: number }
+  | { stage: 'hook';          hookId: string; outcome: 'decided' | 'abstained' | 'timeout' | 'crashed'; exitCode?: number; latencyMs: number }
+  | { stage: 'model';         ruleId: string; matches: boolean; confidence: number; threshold: number;
+                              redactedActionDigest: string; summary: string;        // <= 200 chars, as sent (§7.3 of api-design.md)
+                              outcome: 'decided' | 'below-threshold' | 'unavailable' | 'saturated' | 'malformed' | 'deadline';
+                              latencyMs: number }
+  | { stage: 'content';       direction: 'outbound' | 'inbound'; detectorIds: string[]; findingCount: number; latencyMs: number }
+  | { stage: 'precedence';    comparisons: number; eliminated: Elimination[]; latencyMs: number }
+  | { stage: 'default';       reason: 'no-evaluator-decided'; latencyMs: number };   // the fail-closed initial value surviving
+
+interface CandidateResult {
+  ruleId: string;
+  source: 'deterministic' | 'hook' | 'model' | 'default';
+  decision: DecisionKind;
+  specificity: number;                    // the derived integer, §3
+  layer: 'baseline' | 'project';
+  declarationIndex: number;
+  confidence?: number;                    // model path only
+  won: boolean;
+}
+
+interface Elimination {
+  ruleId: string;                         // the loser
+  lostToRuleId: string | null;
+  key: 1 | 2 | 3 | 4 | 5;                 // the precedence key that decided it — api-design.md §6.1
+  keyName: 'decision-strength' | 'evaluator-authority' | 'specificity' | 'source-layer' | 'declaration-order';
+}
+
+interface DecisionProvenance {
+  guardVersion: string;                   // build id, not marketing version
+  matcherSetVersion: string;              // deterministic matcher implementation
+  specificityWeightsVersion: string;      // §6.2 of api-design.md — changing a weight changes outcomes
+  policyVersion: string;                  // content hash, restated here so provenance is self-contained
+  detectorVersions: Record<string, string>;            // detectorId -> version
+  model?: {                               // present iff a 'model' step ran
+    runtimeId: string;
+    modelId: string;
+    weightsDigest: string;
+    promptTemplateId: string;
+    grammarVersion: string;
+  };
+  platform: { os: 'macos' | 'linux'; arch: string; kernel: string };
+}
+```
+
+#### 5.5.1 Why each list is capped where it is
+
+| Cap | Value | Reason |
+|---|---|---|
+| `steps` | **16** | The pipeline has nine distinct stages and no loops; 16 admits every reachable ordering plus per-rule model steps, and makes the worst case computable |
+| `candidates` | **32** | A 200-rule policy can match an action with dozens of rules. 32 retains far more than any decision needs while bounding the record |
+| `summary` | **200 chars** | Already the bound on what is sent to the model (`api-design.md` §7.1, §7.3); the trace stores what was sent, so the bounds are the same number by construction |
+| encoded trace | **P99 ≤ 4 KB, hard 16 KB** | At 16 KB the writer truncates *by rule* (below) rather than failing the append — a decision must never be lost because its explanation was large |
+
+**Truncation is by rule, not by tail.** Retained first, in order: the winning candidate; the
+elimination that resolved at the earliest precedence key; every step whose `outcome` is an error or
+`deny`-producing state; then remaining candidates by decision strength. `truncated: true` and
+`dropped` are inside the hashed bytes, so a reader can always distinguish "nothing else matched" from
+"more matched and was not kept".
+
+#### 5.5.2 What the trace may never contain
+
+Same boundary as `findings` (§4) and `RedactedAction`:
+
+- No matched content, no file contents, no request bodies, no environment values, no argv beyond the
+  normalised form.
+- No prompt transcript and no model completion — `redactedActionDigest` plus `summary` identify the
+  input; `guard replay` regenerates the prompt locally from the recorded action if a human needs it.
+- No absolute home path (`summary` is cwd-relative, inherited from §7.3 of `api-design.md`).
+
+This keeps the log safe to attach to a bug report, which is the state it will most often be shared
+in — and it means adding a trace does not widen the blast radius of an unauthorised log read.
+
+#### 5.5.3 The fail-closed deny is the case that most needs a trace
+
+When nothing decided, `winner.ruleId` is `null` and the final step is
+`{ stage: 'default', reason: 'no-evaluator-decided' }`, preceded by the step that explains *why*
+nothing decided — a `coverage` gap, an `EVALUATOR_UNAVAILABLE` model step, a `hook` timeout, a
+`normalisation` failure. Without this, the product's most common confusing outcome ("it denied and
+cited no rule") would be its least explainable one, and
+[ADR-009](../05-adr/009-fail-closed-default.md)'s design would read to a user as a bug.
 
 ---
 
@@ -483,6 +638,14 @@ whole value is integrity.
 | `decision` | low-cardinality bitmap/filter | "show me every deny" — the most common query |
 | `ruleIds` | inverted index, rule id → seq list | "what did rule R-014 block" (S-19), denial-rate-per-rule metrics |
 | `kind` | low-cardinality filter | per-action-class analysis and coverage validation |
+
+`ruleIds` indexes the **deciding** rules only. Searching by a *candidate* rule — "which decisions did
+R-014 match without winning" — is a **post-index predicate over the trace** (§5.5), applied after an
+indexed scan on another dimension, and `guard log` reports it as such: it is offered with a `--since`
+or `--session` narrowing and documented as **O(records scanned)**, not O(matches). The alternative, a
+sixth inverted index over `trace.candidates`, would roughly double index write cost on the audit append
+path to serve a diagnostic query, trading the P95 < 5 ms append budget for convenience
+([ADR-012](../05-adr/012-decision-trace.md) item 9).
 
 **N+1 prevention is structural here.** Every query resolves to a **single indexed scan returning whole
 records** — there is no per-record follow-up read, because the record is denormalised (§7) and needs no
@@ -568,6 +731,9 @@ so the repetition is of small fields.
 | FR-27 (clean removal) | §5.1 `removal`, `guard.removed`; §6.4 receipt-as-cache |
 | FR-28 (every MCP request class) | §2.1 five `mcp.*` kinds, five coverage cells |
 | FR-29 (MCP responses are inbound content) | §4 `InboundResult`; `mcp.sample` as an action in §2.1 |
+| FR-30 (every decision carries its trace) | §5.1 `trace`/`provenance` required on a decision record; §5.5 schema and caps |
+| FR-31 (explain a recorded decision) | §5.5 — `steps`, `candidates`, `Elimination.key`; §5.5.3 for the fail-closed case |
+| FR-32 (replay and divergence) | §5.5 `DecisionProvenance` + §5.4 cache-key digest — what a replay compares against |
 | R-07 (engine state out of the agent's reach) | §9 — socket and config paths excluded from every `Confinement`; [`security.md`](security.md) §4.2 |
 
 ---

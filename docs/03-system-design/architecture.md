@@ -1,12 +1,14 @@
 # 03 — System Design: Architecture
 
 **Status**: Draft
-**Last updated**: 2026-10-02
+**Last updated**: 2026-10-04 — A-2 and §8 updated for [ADR-014](../05-adr/014-laya-serving-resolution.md)'s resolution of the Laya-serving open point
 **Approved by**: _pending_
 
 > **Phase-gate note.** `docs/03-system-design/README.md` names **UX Design approved** as this
-> phase's prerequisite. Phase 2 is **⬜ Not started** and Phase 1 is still **Draft** (Q-01 and Q-09
-> open). This document is drafted ahead of that gate at the product owner's explicit request —
+> phase's prerequisite. Phase 2 is **⬜ Not started**; Phase 1 is now **Approved** (Q-01 and Q-09
+> answered 2026-10-02 — [ADR-013](../05-adr/013-model-and-language-resolution.md)), but that does
+> not satisfy *this* phase's own prerequisite. This document is drafted ahead of that gate at the
+> product owner's explicit request —
 > the same precedent under which Phase 4 was drafted. Two consequences, stated rather than absorbed:
 >
 > 1. **No UX artefact is cited as settled.** Where a decision here touches the interface, it rests
@@ -23,8 +25,8 @@
 
 | # | Assumption | Source | Status |
 |---|---|---|---|
-| **A-1** | The product is **single-language Rust**: enforcement core, CLI and TUI are one binary, one type set, no Node runtime shipped. | Q-09 / [ADR-002](../05-adr/002-enforcement-core-language.md) amendment pending; [ADR-011](../05-adr/011-v1-scope-envelope.md) recommends it | **Assumed.** Open question. |
-| **A-2** | The local model is **unnamed** in this document. No accuracy figure, memory figure, context length or quantisation is asserted for it. | Q-01 / [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) | **Deliberately unresolved.** |
+| **A-1** | The product is **single-language Rust**: enforcement core, CLI and TUI are one binary, one type set, no Node runtime shipped. | Q-09 / [ADR-013](../05-adr/013-model-and-language-resolution.md), amending [ADR-002](../05-adr/002-enforcement-core-language.md) | **Confirmed 2026-10-02.** |
+| **A-2** | The local model is **Laya** (ONNX, `choice`/`score`/`noul`, not a chat LLM), served via its own `laya-serve` reference server as a provisioned local sidecar. No figure in this document is yet re-derived from Laya's own measured numbers — ADR-014 treats the published figures as secondary-source estimates pending re-measurement at S-6. | Q-01 / [ADR-013](../05-adr/013-model-and-language-resolution.md); serving mechanism resolved by [ADR-014](../05-adr/014-laya-serving-resolution.md) | **Named 2026-10-02; serving mechanism resolved 2026-10-04.** |
 | **A-3** | TypeScript interface syntax is used throughout Phases 3 and 4 as **schema notation**, not as an implementation-language commitment. Under A-1 these become Rust `struct`/`enum` with `serde`. | Editorial | Notation only. |
 
 ---
@@ -206,6 +208,16 @@ that skips the audit append. The architectural consequences:
 - Dry-run (FR-16) does **not** alter the fold. It alters only what the adapter does with the
   decision, and the audit record carries `mode: 'dry-run'` so the two are never confused in evidence.
 
+**The fold also accumulates the decision trace** ([ADR-012](../05-adr/012-decision-trace.md), FR-30).
+Each stage appends its step as it runs, so the trace is a by-product of evaluation rather than a second
+pass over it: there is no "tracing enabled" variant of the pipeline, and an evaluator that returned a
+decision without appending its step fails a pipeline invariant test. This is the same structural move as
+fail-closed — a property produced by the shape of the code rather than enforced by remembering to do it.
+Its consequence is the case that matters most: when nothing replaces the initial `deny`, the record
+still carries the step that explains **why** nothing decided — a coverage gap, an unavailable runtime, a
+hook timeout, a failed normalisation ([`data-model.md`](data-model.md) §5.5.3). A fail-closed deny with
+no account of itself would be indistinguishable, to a user, from a malfunction.
+
 ### 4.2 Evaluator ordering is a cost gradient, not a preference
 
 Ratifies [ADR-004](../05-adr/004-layered-policy-model.md). Deterministic rules run first and
@@ -215,8 +227,11 @@ classes (credential paths, destructive commands, egress) are **deterministic by 
 wrong model is never the only thing between the agent and an irreversible action.
 
 Precedence is a **fixed total order**, resolved identically by every caller (CLI simulation, daemon,
-tests). The order and its formalisation live in [`api-design.md`](api-design.md) §6; a tie that the
-relation cannot break is a **policy validation failure**, not a runtime coin-flip.
+replay, tests). The order and its formalisation live in [`api-design.md`](api-design.md) §6; a tie that
+the relation cannot break is a **policy validation failure**, not a runtime coin-flip. The resolver
+returns its comparisons as data — one entry per eliminated candidate, naming the deciding key
+([`api-design.md`](api-design.md) §6.4) — which is what lets the audit record show that a cheap layer
+was overruled rather than merely show who won.
 
 ### 4.3 The capability split
 
@@ -238,10 +253,10 @@ This is why audit tampering is an adversarial-gate case rather than an access-co
 | Layer | Technology | Rationale |
 |---|---|---|
 | Enforcement core | **Rust** (2021 edition or later), single static binary | [ADR-002](../05-adr/002-enforcement-core-language.md). No GC pauses inside a P99 < 50 ms budget; the OS confinement primitives are C ABIs reached without an extra FFI boundary; one artefact to install and remove. |
-| CLI + TUI | **Rust**, same binary (A-1) | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md), [ADR-011](../05-adr/011-v1-scope-envelope.md). A read-only TUI leaves TypeScript with no consumer; one language means one hand-written type set and no codegen step (see Q-09, §8). |
+| CLI + TUI | **Rust**, same binary (A-1) | [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md), [ADR-013](../05-adr/013-model-and-language-resolution.md). A read-only TUI leaves TypeScript with no consumer; one language means one hand-written type set and no codegen step. |
 | IPC | **JSON-RPC 2.0 over a Unix domain socket**, mode `0600` | [ADR-003](../05-adr/003-local-daemon-over-unix-socket.md). Filesystem permissions are the authentication; no TCP listener in any configuration, which makes the Privacy NFR inspectable. JSON keeps the wire human-auditable at a cost the budgets absorb (§6). |
 | Policy format | **Declarative text (TOML or YAML), user-owned, git-committable** | FR-04/FR-05: policy must be reviewable in a pull request and validated in CI (`guard policy validate`, exit `2`). The exact surface is fixed in [`data-model.md`](data-model.md) §3. |
-| Model runtime | **Pluggable `LocalModelRuntime` port**, constrained decoding, model unnamed (A-2) | [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). Q-01 is open; the port exists so the choice is late-bound and a recorded-response stub serves tests deterministically. |
+| Model runtime | **Pluggable `LocalModelRuntime` port**, constrained decoding (Laya's own output has no free-text channel to constrain), model named as Laya and served via its own `laya-serve` sidecar (A-2) | [ADR-005](../05-adr/005-pluggable-local-model-runtime.md), [ADR-013](../05-adr/013-model-and-language-resolution.md), [ADR-014](../05-adr/014-laya-serving-resolution.md). The port exists so the choice is late-bound and a recorded-response stub serves tests deterministically regardless of how the model is served. |
 | Confinement | **OS-native**: Seatbelt / `sandbox_init` (macOS); Landlock + seccomp-bpf + network namespace (Linux) | [ADR-008](../05-adr/008-sandbox-confinement-primitive.md). A hand-rolled boundary would be a new attack surface claiming to be a mitigation. **Windows unsupported and no Windows boundary claim is published.** |
 | Audit store | **Embedded, append-only, hash-chained segments**; engine chosen against a measured benchmark | [ADR-006](../05-adr/006-audit-log-integrity.md). Selection criteria and the benchmark that decides it are in [`data-model.md`](data-model.md) §6 — the P95 < 5 ms durable-append budget is the gate, not a preference between libraries. |
 | Service management | **launchd user agent** (macOS) / **systemd user unit** (Linux) | Per-user, no root. Owned by `install`/`uninstall` and torn down **last** ([ADR-003](../05-adr/003-local-daemon-over-unix-socket.md) item 7). |
@@ -277,11 +292,14 @@ sequenceDiagram
     N->>C: key = hash(normalised action) + policyVersion
     alt cache hit (non-ask, non-hook, enforcing)
         C-->>P: cached decision
+        Note over P: trace step cache.hit<br/>cites reused actionId + key digest
     else miss
         P->>P: fold, initial value = deny
-        Note over P: deterministic P95 < 20 ms<br/>hook bounded timeout<br/>model P95 < 300 ms
+        Note over P: deterministic P95 < 20 ms<br/>hook bounded timeout<br/>model P95 < 300 ms<br/>each stage appends its trace step
     end
-    P->>W: append(record)
+    P->>P: resolver returns winner + eliminations (key 1…5)
+    Note over P: trace construction P95 < 1 ms<br/>inside the decision budget
+    P->>W: append(record incl. trace + provenance)
     W-->>P: durable (fsync) — P95 < 5 ms
     P-->>R: decision + ruleIds + evaluator + latencyMs
     R-->>A: decision
@@ -300,6 +318,11 @@ sequenceDiagram
 guarantee (FR-19): there is no window in which the agent has been told it may proceed but the record
 does not yet exist. It is also why the 5 ms durable-append budget is load-bearing rather than
 aspirational — it sits inside the 20 ms decision budget.
+
+**The trace is written on that same append** (FR-30), not afterwards and not elsewhere. A second write
+would reintroduce precisely the window the first one closes: a decision returned, then an explanation
+that may or may not land. One record, one fsync, one hash
+([ADR-012](../05-adr/012-decision-trace.md) item 1).
 
 ### 6.2 Content screening — the two directions are different problems
 
@@ -438,7 +461,7 @@ rather than left open:
 
 | ADR | Disposition | Phase 3 obligation discharged in |
 |---|---|---|
-| 002 — Rust core | **Ratified, with the Q-09 amendment assumed** (A-1): single-language Rust, one binary, one type set. If Q-09 resolves the other way, §8 names the delta. | §3.3, §5 |
+| 002 — Rust core | **Ratified, with the Q-09 amendment confirmed** (A-1): single-language Rust, one binary, one type set — [ADR-013](../05-adr/013-model-and-language-resolution.md). | §3.3, §5 |
 | 003 — local daemon over UDS | **Ratified.** The socket path is treated as part of the threat model, not an implementation detail. | §3.1, §6.5; [`security.md`](security.md) §4.2 |
 | 004 — layered policy evaluation | **Ratified.** The **specificity relation** the total order depends on is formalised rather than asserted. | [`api-design.md`](api-design.md) §6 |
 | 005 — pluggable local model runtime | **Ratified.** The **constrained-decoding schema** is defined, and a runtime that cannot honour it is **rejected at startup** rather than trusted and parsed defensively. | [`api-design.md`](api-design.md) §7 |
@@ -449,6 +472,7 @@ rather than left open:
 | 010 — no web-server UI | **Ratified.** No HTTP surface anywhere; the CORS review-criteria item is therefore N/A with reason. | §5; [`security.md`](security.md) §8 |
 | 011 — v1 scope envelope | **Ratified as the scope this design implements.** Two adapters, two platforms, enforcing from the first action, removal in the envelope. | throughout |
 | 001 — React/Next.js | Already superseded by ADR-010. **Binds nothing.** Not cited as a constraint anywhere in Phase 3. | — |
+| 012 — decision trace | **Raised by this phase and adopted into this design** (not a delegation from Phase 2): the evidence record was carrying a verdict without its grounds. The fold accumulates the trace, the resolver reports its comparisons, the runtime reports its identity, and `explain`/`replay` are product surfaces with budgets. | §4.1, §4.2, §6.1, §9; [`data-model.md`](data-model.md) §5.5; [`api-design.md`](api-design.md) §3.1, §6.4, §7.6 |
 
 **Phase 4 corrections carried here.** [`../04-solution-design/component-design.md`](../04-solution-design/component-design.md)
 §3 (web UI component tree) is withdrawn as a build target and survives only as the TUI view
@@ -459,24 +483,46 @@ rather than illustrative.
 
 ---
 
-## 8. What changes if the open questions resolve differently
+## 8. What the open-question resolutions changed, and what is left open
 
-Neither question is answered here. Both are named with their architectural delta so that resolving
-them is an edit, not a redesign.
+Both questions this section used to treat as live hypotheticals were answered by the product owner
+on 2026-10-02 ([ADR-013](../05-adr/013-model-and-language-resolution.md)). The narrower point that
+answer raised — how Laya is served — was itself resolved by the owner on 2026-10-04
+([ADR-014](../05-adr/014-laya-serving-resolution.md)). This section now records what those answers
+confirmed, kept as a historical note of the delta this document would otherwise have absorbed. No
+open point remains.
 
-**Q-09 — not single-language Rust** (A-1 falsified): a TypeScript consumer returns, and with it a
-second type set for the RPC surface. The delta is confined to three things — the wire types become
-**generated** from one source of truth instead of hand-written; the TUI becomes a separate process
-and artefact, so `install`/`uninstall` place and remove two files; and the version-skew guarantee in
-§3.3 (an adapter can never be newer than the engine) must become an **explicit handshake** in
-`session.open` rather than a property of shared compilation. Nothing in §4 or §6 changes.
+**Q-09 — single-language Rust, confirmed** (A-1 confirmed, not falsified): the TypeScript-consumer
+branch this section used to describe did not happen. The wire types stay **hand-written** in one
+language; the TUI stays in the same process and binary as the engine, so `install`/`uninstall` place
+and remove one file, not two; and the version-skew guarantee in §3.3 (an adapter can never be newer
+than the engine) remains a property of shared compilation rather than needing an explicit handshake
+in `session.open`. Nothing in §4 or §6 changes from what is already written there.
 
-**Q-01 — the local model** (A-2 still open): the choice affects only `ModelEvaluator`'s behind-the-port
-details. It **cannot** affect the architecture, because the constrained-decoding schema
-([`api-design.md`](api-design.md) §7) and the rejection-at-startup rule make the port's contract
-independent of the model. What it *does* gate: the resident-memory NFR (< 5 GB including the model),
-the warm-up figure inside the < 15 s cold start, and the accuracy corpus's achievable headroom
-against FR-11. No number in this document is derived from a model identity.
+**Q-01 — the local model is Laya** (A-2, named 2026-10-02, serving mechanism resolved 2026-10-04):
+naming the model does not by itself change the architecture, because the constrained-decoding
+schema ([`api-design.md`](api-design.md) §7) and the rejection-at-startup rule make the port's
+contract independent of model identity. What naming Laya *does* gate: the resident-memory NFR
+(< 5 GB including the model), the warm-up figure inside the < 15 s cold start, and the accuracy
+corpus's achievable headroom against FR-11 — none of those numbers in this document has yet been
+re-derived from a measured baseline (the ≈1.7 GB fp32 ONNX weights and ≈140 ms warm 3-question
+batch figure are secondary-source estimates, per [ADR-014](../05-adr/014-laya-serving-resolution.md)),
+and that re-derivation is deferred to the start of S-6, not before.
+
+**Resolved: how Laya is served.** Laya's only published Node/TypeScript wrapper, and its shape as
+an ONNX classifier rather than a chat model, put it in tension with both the single-language-Rust
+confirmation above and this document's original "default to an Ollama-class local server" framing
+of decision item 2 ([ADR-005](../05-adr/005-pluggable-local-model-runtime.md)). ADR-013 named two
+resolutions without choosing one — (a) an Ollama-servable substitute, or (b) embedding `ort` plus a
+from-scratch Rust reimplementation of Laya's pre/post-processing — and
+[ADR-014](../05-adr/014-laya-serving-resolution.md) took neither: it runs Laya's own Python
+reference server (`laya-serve`) as a provisioned local sidecar over loopback HTTP, which needs no
+Node and no Rust reimplementation of Laya's internals. The `ModelEvaluator` port and the
+constrained-decoding schema this document already specifies do not change — only what sits behind
+the port does. ADR-014 also replaced the model-generated reason string with one the engine
+templates from whichever per-rule `noul` check(s) crossed threshold, and requires every decision's
+rule-checks to be batched into a single call to `laya-serve` to stay inside the P95/P99 budget on
+CPU-only hardware.
 
 ---
 
@@ -496,6 +542,10 @@ each one is named in [`../04-solution-design/testing-strategy.md`](../04-solutio
 | Policy load | **< 500 ms for 200 rules** | Parse + validate + merge off the hot path; atomic swap |
 | Audit write | **P95 < 5 ms**, never blocking beyond that | Append-only segments, single writer, one fsync (§6.1) |
 | Audit query | **P95 < 1 s over 1 M records** | Indexes on the five FR-21 dimensions ([`data-model.md`](data-model.md) §6) |
+| Trace construction | **P95 < 1 ms, P99 < 2 ms** — inside the decision budget, not added to it | Steps pushed onto a pre-sized buffer during evaluation; the resolver already computes the comparisons it reports (§4.2) |
+| Explain a recorded decision | **P95 < 50 ms** | One indexed record read plus formatting; no evaluation, no policy load, works while the runtime is down |
+| Replay a recorded decision | deterministic **P95 < 100 ms**; model path inherits **P95 < 300 ms** | Same resolver and evaluators as enforcement, no audit append, no cache write |
+| Encoded trace size | **P50 ≤ 512 B, P99 ≤ 4 KB, 16 KB hard cap** | Schema-level caps (≤ 16 steps, ≤ 32 candidates); ids and enums, never content |
 | Cold start to first decision | **< 2 s excl. model runtime; < 15 s incl.** | Daemon decides on deterministic rules before the runtime is warm; model rules deny until it is |
 | Concurrent sessions | **≥ 4** | Per-session cache scope; round-robin fairness over one bounded queue |
 | Memory | **engine RSS < 250 MB; < 5 GB incl. model** | Bounded queue and bounded cache; weights outside the engine's heap |

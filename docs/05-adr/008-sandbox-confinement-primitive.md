@@ -18,7 +18,7 @@ action and ask the guard about it, and it is tabulated here because the asymmetr
 
 | Capability | macOS | Linux | v1 status |
 |---|---|---|---|
-| **Pre-execution supervision** — hold an action, ask userspace, allow/deny | Endpoint Security framework `AUTH` events | `seccomp` user notification (`SECCOMP_USER_NOTIF`) | **Not pursued.** The macOS path needs a notarized system extension plus an Apple-granted entitlement and answers under a kernel deadline; the Linux path ships freely. Building only the Linux half breaks ADR-011's platform parity — deferred to [ADR-012](012-supervised-exec-adapter.md) |
+| **Pre-execution supervision** — hold an action, ask userspace, allow/deny | Endpoint Security framework `AUTH` events | `seccomp` user notification (`SECCOMP_USER_NOTIF`) | **Not pursued.** The macOS path needs a notarized system extension plus an Apple-granted entitlement and answers under a kernel deadline; the Linux path ships freely. Building only the Linux half breaks ADR-011's platform parity — deferred to [ADR-015](015-supervised-exec-adapter.md) |
 
 Pre-execution supervision is an **interception point**, not a confinement boundary, so it belongs to
 the adapter layer ([ADR-007](007-cli-integration-strategy.md)) rather than to this ADR. The
@@ -171,7 +171,7 @@ Trade-offs accepted:
   be answered inside a kernel-imposed window or the default action is applied, which a local model in
   the decision path cannot guarantee; (c) a Linux-only implementation breaks ADR-011's
   both-platforms-tested parity. Pursued — if at all — as an **interception point** in
-  [ADR-012](012-supervised-exec-adapter.md), post-v1 and Linux-only, and never as part of a
+  [ADR-015](015-supervised-exec-adapter.md), post-v1 and Linux-only, and never as part of a
   `BoundaryDescription`. Do not read this rejection as the one above: that one says *it only looks
   like confinement*; this one says *it is confinement we cannot ship on both platforms*.
 - **A container (Docker-class) per session.** Strong, familiar, cross-platform-ish. Rejected for
@@ -200,7 +200,7 @@ Trade-offs accepted:
 **Related**: [ADR-011](011-v1-scope-envelope.md) (answers Q-02 and Q-03) ·
 [ADR-002](002-enforcement-core-language.md) ·
 [ADR-007](007-cli-integration-strategy.md) · [ADR-009](009-fail-closed-default.md) ·
-[ADR-012](012-supervised-exec-adapter.md) (pre-execution supervision as an interception point, kept
+[ADR-015](015-supervised-exec-adapter.md) (pre-execution supervision as an interception point, kept
 outside this boundary) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) FR-17, FR-18, R-02, R-07,
 Q-02, Q-03 ·

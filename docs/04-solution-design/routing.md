@@ -43,6 +43,8 @@ the Privacy NFR verifiable rather than argued.
 | `policy.current` | CLI / UI | read | < 20 ms | Active policy, content hash, version. |
 | `audit.query` | CLI / UI | read | P95 < 1 s over 1 M records | FR-21 dimensions: session, time range, decision, rule id, action type. |
 | `audit.verify` | CLI / UI | read | — | Walks the hash chain; returns verified or the breaking `seq` (FR-20). |
+| `decision.explain` | CLI / UI | read | P95 < 50 ms | Renders a recorded decision's trace — winning rule, every candidate, the eliminating precedence key, provenance — **from the record alone**. Evaluates nothing, so it works with the model runtime stopped and the policy deleted (FR-31). |
+| `decision.replay` | CLI / UI | read | Deterministic P95 < 100 ms / model < 300 ms | Re-runs a recorded action through the current pipeline with the audit and cache writers disabled; returns `identical`, `divergent` with attribution, or `unreplayable` (FR-32). |
 | `audit.stream` | CLI / UI | read | — | Server-push of new records for the live timeline. |
 | `audit.export` | CLI | read | — | Structured export to an external pipeline (FR-22). |
 | `health` | Any | read | < 20 ms | Engine status, model-runtime availability, policy version, per-CLI coverage (FR-23). |
@@ -65,6 +67,13 @@ explicitly matters more than inventing one. What the surface does enforce:
   a rule an author could forget.
 - **Every mutating method is audited**, including `policy.reload` and `ask.resolve`, with the
   actor recorded.
+- **`decision.replay` is a `read` method that runs the decision pipeline**, which is the one place
+  the split needs stating rather than assuming. It is a read because of what it is forbidden to do:
+  it never enforces (no action is dispatched), never appends (the audit writer is absent, not
+  bypassed), and never populates the decision cache (so a replay cannot change a later real
+  decision). A replay that violates any of the three fails the determinism gate
+  ([`testing-strategy.md`](testing-strategy.md) §2.4), which is how this stays a property rather
+  than an intention.
 
 ### 1.3 Error schema
 
@@ -140,9 +149,11 @@ The audit append sits **before** the response, not after. That ordering is the w
 | `guard dry-run <command…>` | Run an agent session with enforcement off but logging on | FR-16, S-10 |
 | `guard allow-once <actionId> --reason <text>` | Resolve a pending `ask` | FR-25, S-15 |
 | `guard audit view` | Open the **read-only TUI** audit viewer in the terminal (Q-06) | S-24 |
+| `guard explain <actionId \| --seq N> [--json]` | Why that decision came out that way: the winning rule, every rule that matched, and the precedence key that eliminated each loser, plus the provenance it was decided under. Reads the record; evaluates nothing | S-26, FR-31 |
+| `guard replay <actionId \| --seq N> [--policy <version>] [--no-model]` | Would it still decide the same way? Exit `4` on divergence, with the divergence attributed to policy, provenance or model non-determinism | S-26, FR-32 |
 
-Conventions: exit `0` allow/success, `1` operational error, `2` policy invalid, `3` denied —
-scriptable. Human output respects `NO_COLOR` and works without colour; `--json` on every read
+Conventions: exit `0` allow/success, `1` operational error, `2` policy invalid, `3` denied,
+**`4` replay divergence** — scriptable. Human output respects `NO_COLOR` and works without colour; `--json` on every read
 command for machine use (Accessibility NFR).
 
 ### 2.1 Removal semantics (`guard uninstall`)
@@ -225,6 +236,7 @@ would imply a security boundary that does not exist.
 | `/` | `DashboardPage` | RSC, `revalidate: 30` | `health` + `metrics` | Route-level → "engine unreachable" state |
 | `/sessions` | `SessionListPage` | RSC, dynamic (URL filters) | `audit.query` grouped by session | Route-level |
 | `/sessions/[id]` | `SessionDetailPage` | RSC shell + streamed timeline | `audit.query` by session, `audit.verify` | Route-level; `notFound()` on unknown id |
+| `/decisions/[actionId]` | `DecisionExplainPage` | RSC | `decision.explain` | Route-level; `RECORD_NOT_FOUND` → not-found state, `TRACE_UNAVAILABLE` → an explicit "written before traces" state, never a blank panel |
 | `/policy` | `PolicyEditorPage` | RSC shell + client editor | `policy.current` | Route-level; keeps the unsaved draft |
 | `/policy/simulate` | `SimulatePage` | RSC shell + client form | `policy.current` | Route-level |
 | `/settings` | `SettingsPage` | RSC | local preferences + `policy.current` paths | Route-level |
@@ -256,21 +268,19 @@ would imply a security boundary that does not exist.
 | `/sessions`, `/sessions/[id]` | S-06, S-07, S-19 |
 | `/policy` | S-01, S-10, S-18, S-19, S-20 |
 | `/policy/simulate` | S-10, S-20 |
+| `/decisions/[actionId]` | S-26, FR-30, FR-31 |
 | `/settings` | S-21 |
 
 ---
 
 ## 4. Blocking questions
 
-| # | Question | Blocks |
-|---|---|---|
 Q-02, Q-04 and Q-06 were answered on 2026-10-02: §1.1 is implemented **twice** (Claude Code hook and
 MCP proxy), the socket path convention covers **macOS and Linux only**, and §3 is withdrawn
-([ADR-011](../05-adr/011-v1-scope-envelope.md)). What still blocks:
-
-| # | Question | Blocks |
-|---|---|---|
-| Q-09 / ADR-002 | Single-language Rust? | RPC codec and whether `shared/api` needs code generation at all — one language means one hand-written type set |
+([ADR-011](../05-adr/011-v1-scope-envelope.md)). Q-09 was answered later the same day
+([ADR-013](../05-adr/013-model-and-language-resolution.md)): the product is **single-language
+Rust**, so the RPC codec and `shared/api` stay one hand-written type set with no code-generation
+step. Nothing in this document is blocked any more.
 
 **Related**: [`component-design.md`](component-design.md) ·
 [`state-management.md`](state-management.md) · [`testing-strategy.md`](testing-strategy.md) · ADRs

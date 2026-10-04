@@ -1,4 +1,4 @@
-# ADR-012: Supervised-exec as a third adapter shape — Linux-only, post-v1, declared not claimed
+# ADR-015: Supervised-exec as a third adapter shape — Linux-only, post-v1, declared not claimed
 
 ## Status
 Proposed — **post-v1**. Blocked on **Q-10** (is a Linux-only capability acceptable under ADR-007 §6's
@@ -189,7 +189,7 @@ Trade-offs accepted:
   answers for v1, and this is the same exposure — the developer's real repository, credentials and
   toolchain must be mounted in for the setup to be useful, which recreates most of the risk while
   adding the friction that was the reason for rejection.
-- **Fold this entirely into ADR-008's Rejected Alternatives and skip ADR-012.** Cheaper, and avoids
+- **Fold this entirely into ADR-008's Rejected Alternatives and skip ADR-015.** Cheaper, and avoids
   carrying a post-v1 ADR in the tree. Rejected, narrowly: ADR-008 is about the *confinement
   boundary*, and the substance here is an *interception point*. Filing it there would merge the two
   concepts that item 4 exists to keep apart — and the FR-09 gap, which is an ADR-007 concern, would
@@ -200,7 +200,7 @@ Trade-offs accepted:
   amended to say so rather than left as an undesigned promise.
 
 ---
-**ADR Number**: 012
+**ADR Number**: 015
 **Date**: 2026-10-02
 **Author**: Claude (draft for review by Aries Ng)
 **Related**: [ADR-007](007-cli-integration-strategy.md) (the `CliAdapter` contract and the coverage

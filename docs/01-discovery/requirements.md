@@ -140,6 +140,22 @@ testable; acceptance criteria are stated where the story is not self-evidently v
   are printed; `--purge` is required to delete them and prompts for confirmation; the audit chain
   ends with a verifiable terminal record so `guard log verify` can distinguish removal from
   truncation.
+- **S-26** As a developer, I want to ask the guard *why* it decided what it decided — and whether it
+  would still decide the same way — so that a surprising denial is something I can inspect and argue
+  with rather than a verdict I have to work around.
+  *Rationale:* with enforcement on from the first action (Q-08) and fail-closed as the default
+  ([ADR-009](../05-adr/009-fail-closed-default.md)), R-01's false-deny is a *first-session* event.
+  The acceptance path for that risk — read the reason, fix the rule — assumes the decision can be
+  reconstructed. A verdict plus a one-line reason is not enough when the deciding factor was a
+  precedence comparison (a model deny over a deterministic allow), a cache hit, or an evaluator that
+  never ran.
+  *Accepts:* `guard explain <actionId>` names the deciding rule, the stages that ran, every rule that
+  matched and the precedence key that eliminated it, and the provenance in force — from the stored
+  record alone, working while the model runtime is down, in P95 < 50 ms; a fail-closed deny that no
+  rule produced explains *why nothing decided*; `guard replay` re-decides the recorded action and
+  reports identical or divergent with an attribution, exiting `4` on divergence; neither command
+  enforces, writes to the log, or warms the cache. See
+  [ADR-012](../05-adr/012-decision-trace.md), FR-30 … FR-32.
 
 ### P1 — Should Have
 
@@ -220,7 +236,7 @@ policy distribution or a team view that a single-user local tool has nowhere to 
 - **FR-09** The system SHALL expose the same policy engine to CLIs lacking such an interface via
   an MCP proxy and/or process-level interception.
   **v1 satisfies the MCP-proxy half only.** Process-level interception is undesigned for v1 and
-  deferred to [ADR-012](../05-adr/012-supervised-exec-adapter.md) (post-v1, Linux-only, blocked on
+  deferred to [ADR-015](../05-adr/015-supervised-exec-adapter.md) (post-v1, Linux-only, blocked on
   Q-10). The gap this leaves is explicit: a host CLI offering **neither** a hook interface **nor**
   MCP traffic has no interception point, so every action class is `unavailable` and FR-10 denies all
   of them — such a host is **unservable in v1**, not partially served.
@@ -268,7 +284,8 @@ policy distribution or a team view that a single-user local tool has nowhere to 
 
 - **FR-19** The system SHALL append to an immutable local log, for every intercepted action: a
   timestamp, session id, agent identity, action type, action payload (masked per policy),
-  decision, deciding rule ids, evaluator used, and evaluation latency.
+  decision, deciding rule ids, evaluator used, and evaluation latency — **and the FR-30 decision
+  trace**, in the same record, under the same hash.
 - **FR-20** The system SHALL detect tampering with the audit log (e.g. hash-chained records) and
   report it.
 - **FR-21** The system SHALL provide query over the log by session, time range, decision, rule
@@ -277,6 +294,27 @@ policy distribution or a team view that a single-user local tool has nowhere to 
   for export to an external log pipeline.
 - **FR-23** The system SHALL expose a health check reporting engine status, model-runtime
   availability, policy version in force, and per-CLI interception coverage.
+- **FR-30** The system SHALL record, **inside the same tamper-evident record as the decision**, a
+  bounded **decision trace** sufficient to reconstruct how that decision was reached: the evaluation
+  stages that ran and in what order, every rule that matched (not only the one that won), the
+  precedence key that eliminated each losing candidate, and the **provenance** of every component
+  whose version can change an outcome — guard build, matcher set, specificity weights, policy
+  version, detector versions, and, where the model ran, model identity and weights digest. The trace
+  SHALL be produced for **every** decision, including a decision served from cache and a
+  fail-closed deny that no rule produced, with **no verbose mode, sampling, or debug level**
+  involved. It SHALL contain no matched content, no payload value, and no prompt transcript, and
+  SHALL be bounded by schema — **≤ 16 stages, ≤ 32 candidate rules, P99 ≤ 4 KB encoded, 16 KB
+  absolute** — declaring truncation and the dropped counts within the hashed bytes rather than
+  shortening silently.
+- **FR-31** The system SHALL explain any recorded decision **from the stored record alone**, without
+  consulting the live policy or the model runtime, in **P95 < 50 ms**, naming the deciding rule, the
+  comparison that produced it, and the provenance under which it was made.
+- **FR-32** The system SHALL re-evaluate a recorded action against a named policy version and report
+  whether the outcome is identical or divergent, attributing a divergence to the policy, to a
+  provenance change, or to model non-determinism — and reporting it as **unexplained** when none of
+  those account for it. Replay SHALL neither enforce, append to the log, nor populate the decision
+  cache. On the deterministic and cache paths, replay with identical provenance and policy SHALL be
+  **bit-identical**; on the model path no bitwise claim is made.
 
 ### Operation
 
@@ -354,8 +392,20 @@ policy distribution or a team view that a single-user local tool has nowhere to 
 ### Observability
 
 - Every decision emits a structured event with rule id, decision, evaluator, and latency (FR-19).
+- **Every decision carries its own reconstruction** (FR-30): stages, candidate rules, eliminating
+  precedence key, provenance. Budgets, inside the existing hot-path budgets rather than added to
+  them: trace construction **P95 < 1 ms, P99 < 2 ms**; added audit-append cost **P95 < 1 ms**;
+  encoded size **P50 ≤ 512 B, P99 ≤ 4 KB**; log growth **still < 1 GB / 30 days**, measured as a
+  release gate rather than assumed.
+- **Explain and replay are product surfaces, not debugging aids** (FR-31, FR-32): `guard explain`
+  **P95 < 50 ms** from the record alone; `guard replay` deterministic **P95 < 100 ms**, exit code `4`
+  on divergence so a determinism check is a CI job over real recorded history.
 - Metrics exposed: decisions/s by outcome, evaluator mix, P50/P95/P99 latency per evaluator,
-  model-runtime availability, policy version, denial rate per rule, override count.
+  model-runtime availability, policy version, denial rate per rule, override count, **cache-hit
+  rate, trace truncation rate, encoded-trace size P50/P99, and replay divergences by attribution**.
+- **Zero untraced decisions and zero unexplainable records** are acceptance conditions, measured the
+  same way "zero decisions unlogged" is: a decision record without a trace fails validation, and the
+  pipeline cannot produce one.
 - Health check per FR-23.
 
 ### Accessibility
@@ -400,8 +450,8 @@ the product opens no TCP port in any configuration
 | **Interface** | **CLI + config file + a read-only TUI audit viewer** (Q-06). No web UI. WCAG 2.1 AA applies to the terminal and TUI surfaces. |
 | **Day-one posture** | **Enforcing immediately** (Q-08). No dry-run grace period; `guard dry-run` is opt-in. |
 | **No inherited UI stack** | ADR-001 (Next.js/RSC) was scaffold boilerplate and is **superseded by [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md)**: it binds nothing. The UI is a TUI, in-process, with no server runtime and no listener, read-only against the daemon. |
-| **Open by design** | The enforcement core's language/runtime was never settled by any earlier ADR; startup time, latency, and OS-level sandboxing are different constraints. Now proposed in [ADR-002](../05-adr/002-enforcement-core-language.md) (Rust core, TypeScript UI) — **amendment pending**: with a TUI rather than a web UI the TypeScript half has no consumer, so the recommendation is single-language Rust (Q-09, [ADR-011](../05-adr/011-v1-scope-envelope.md)). |
-| **Local model runtime** | Pluggable (Ollama or equivalent). No hard dependency on one model or vendor — see [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). |
+| **Single-language Rust** | **Confirmed 2026-10-02** (Q-09, [ADR-013](../05-adr/013-model-and-language-resolution.md)): enforcement core, CLI, and TUI are one Rust binary. [ADR-002](../05-adr/002-enforcement-core-language.md) is amended accordingly; no Node runtime ships. |
+| **Local model runtime** | Pluggable in the port's design — see [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). The model is named: **Laya** (Q-01, [ADR-013](../05-adr/013-model-and-language-resolution.md)), which is not Ollama-servable. It is served via its own `laya-serve` reference server as a local sidecar — ADR-005 item 2, resolved by [ADR-014](../05-adr/014-laya-serving-resolution.md). |
 | **No vendor SDK in the enforcement path** | And no cloud service in the policy-decision path. |
 | **Host agents unmodified** | Integration through documented hook/permission interfaces; no forks or patches — see [ADR-007](../05-adr/007-cli-integration-strategy.md). |
 | **Hardware floor** | Must run on a developer laptop with 16 GB RAM alongside the IDE and the agent — this caps model size and is the real constraint behind the latency targets. |
@@ -423,6 +473,10 @@ the product opens no TCP port in any configuration
 - Structured denial responses the host agent can parse.
 - Outbound secret/PII masking; inbound prompt-injection screening (P1).
 - Append-only, hash-chained, queryable audit log with structured export.
+- **A decision trace inside every decision record, with `guard explain` and `guard replay`** (FR-30 …
+  FR-32, [ADR-012](../05-adr/012-decision-trace.md)). In scope for v1 rather than after it because a
+  record written without a trace can never acquire one, so shipping the log first would create a
+  permanently unexplainable era at exactly the point where the default policy is least trustworthy.
 - **A read-only TUI audit viewer** (Q-06), in-process, with no listener and no write path.
 - Dry-run mode as an **opt-in** facility, one-off interactive override, hot policy reload.
 - Single-machine, single-developer installation; **enforcing from the first action** (Q-08).
@@ -491,6 +545,11 @@ the product opens no TCP port in any configuration
 | **Coverage matrix** | Per-CLI table of which action classes are interceptable, published and asserted at startup. |
 | **Reference workload** | The fixed, recorded agent session used for all performance targets. |
 | **Evaluation corpus** | The versioned, labelled action set used to gate FR-11/FR-13 accuracy in CI. |
+| **Decision trace** | The bounded, structured record of *how* a decision was reached — stages run, rules that matched, the precedence key that eliminated each loser — stored inside the decision's own tamper-evident record (FR-30). |
+| **Provenance** | The identity and version of every component that could change an outcome: guard build, matcher set, specificity weights, policy version, detector versions, model id and weights digest (FR-30). |
+| **Precedence key** | One of the five ordered comparisons that resolve two matching rules into one decision; the trace names which key eliminated each losing candidate. |
+| **Replay** | Re-evaluating a recorded action against a named policy version to see whether today's engine still decides the same way; never enforces and never writes (FR-32). |
+| **Divergence** | A replay whose outcome differs from the record, attributed to the policy, to provenance, to model non-determinism — or **unexplained**, which is a defect. |
 
 ---
 
@@ -518,10 +577,17 @@ flowchart TD
     I -->|rejected| L
     K --> M[Execute in sandbox]
     M --> N[Inbound content screen]
-    F --> O[Audit log: append + hash-chain]
+    C --> T["Trace step appended at every stage<br/>(FR-30) — stages, candidates,<br/>eliminating precedence key, provenance"]
+    E --> T
+    G --> T
+    H --> T
+    F --> O["Audit log: append + hash-chain<br/>decision AND trace, one record, one hash"]
     L --> O
     N --> O
+    T --> O
     O --> P[Return result or denial to agent]
+    O --> Q["guard explain — from the record alone (FR-31)"]
+    O --> R["guard replay — divergence + attribution (FR-32)"]
 ```
 
 ### Context
@@ -576,30 +642,42 @@ Per `.ai/rules/review-criteria.md`:
       2026-10-02 (Windows, web UI, team distribution, defence against an actively escaping agent).
 - [x] Scope envelope confirmed by the product owner — Q-02 … Q-08, recorded in
       [ADR-011](../05-adr/011-v1-scope-envelope.md).
+- [x] Q-01 and Q-09 answered by the product owner later the same day — recorded in
+      [ADR-013](../05-adr/013-model-and-language-resolution.md).
 
-**Blocking for approval**: **Q-01** (which local model) and **Q-09** (single-language Rust) below.
-Q-02 … Q-08 were answered on 2026-10-02 and no longer block. **Q-10** is open but **not** blocking —
-it gates [ADR-012](../05-adr/012-supervised-exec-adapter.md) alone, which is post-v1.
+**Approved 2026-10-02.** All eight Open Questions are answered; none block. A ninth, **Q-10** (is
+a Linux-only capability admissible?), was raised in design review the same day and is open but
+**not** blocking — it gates [ADR-015](../05-adr/015-supervised-exec-adapter.md) alone, which is
+post-v1.
 
 ---
 
 ## Open Questions
 
-Carried from `.ai/context/project-brief.md` and extended. **Seven of the original eight were
-answered by the product owner on 2026-10-02**, in a requirements-confirmation session recorded as
-[ADR-011](../05-adr/011-v1-scope-envelope.md). Two of those eight remain open and block Discovery
-approval. **Q-10 was raised in design review on 2026-10-02 and is open but non-blocking** — it gates
-only [ADR-012](../05-adr/012-supervised-exec-adapter.md), which is post-v1.
+Carried from `.ai/context/project-brief.md` and extended. **All eight were answered by the product
+owner on 2026-10-02** — seven in the requirements-confirmation session recorded as
+[ADR-011](../05-adr/011-v1-scope-envelope.md), and the remaining two (Q-01, Q-09) later the same
+day, recorded in [ADR-013](../05-adr/013-model-and-language-resolution.md). None block Discovery
+approval. ADR-013 raised one narrower open point of its own — how Laya is served — which the
+owner resolved on 2026-10-04 ([ADR-014](../05-adr/014-laya-serving-resolution.md)); it never
+blocked Discovery, only the finalizing of ADR-005 item 2. A ninth question, **Q-10**, was raised in
+design review on 2026-10-02 and is open but non-blocking — it gates only
+[ADR-015](../05-adr/015-supervised-exec-adapter.md), which is post-v1.
 
 ### Open
 
 | # | Question | Why it blocks |
 |---|---|---|
-| **Q-01** | **Local model choice.** The brief names "laya" / "jev". The owner confirms **"laya" is a specific model**, not a Llama-class placeholder — the exact name, and where it comes from (an Ollama tag, a Hugging Face repo, something internal), is still needed. | Sets the memory floor against the < 5 GB budget and the P95 model-path latency target, and makes FR-11's accuracy gate measurable. [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) stands as written — the runtime is pluggable — but its numbers are unverifiable until the model is named. |
-| **Q-09** | **Single-language Rust?** Now that Q-06 answered with a TUI, nothing consumes the TypeScript half of [ADR-002](../05-adr/002-enforcement-core-language.md). Recommendation: build the TUI in-process in Rust, ship one binary, delete the schema-codegen step. | Raised *by* the answers rather than carried from the brief. Decides whether a Node runtime ships inside a security tool, and whether S-09's one-command install is one binary. |
-| **Q-10** | **Is a Linux-only capability admissible?** FR-09 offers "an MCP proxy **and/or** process-level interception", but the only mechanism that can review an action pre-execution at the kernel's own interface is `seccomp` user notification on Linux; macOS's equivalent (Endpoint Security `AUTH` events) needs an Apple-granted entitlement and answers under a kernel deadline. So the second half of FR-09 is buildable on one v1 platform and not the other. Recommendation: **no for v1**, defensible post-v1 as matrix-declared defence in depth with the macOS row empty. | **Does not block approval of this document.** It gates [ADR-012](../05-adr/012-supervised-exec-adapter.md) only, and tests whether ADR-007 §6's "do not advertise support on an incomplete matrix" rule tolerates a platform-asymmetric capability at all. A "no" closes ADR-012 as Rejected. |
+| **Q-10** | **Is a Linux-only capability admissible?** FR-09 offers "an MCP proxy **and/or** process-level interception", but the only mechanism that can review an action pre-execution at the kernel's own interface is `seccomp` user notification on Linux; macOS's equivalent (Endpoint Security `AUTH` events) needs an Apple-granted entitlement and answers under a kernel deadline. So the second half of FR-09 is buildable on one v1 platform and not the other. Recommendation: **no for v1**, defensible post-v1 as matrix-declared defence in depth with the macOS row empty. | **Does not block approval of this document.** It gates [ADR-015](../05-adr/015-supervised-exec-adapter.md) only, and tests whether ADR-007 §6's "do not advertise support on an incomplete matrix" rule tolerates a platform-asymmetric capability at all. A "no" closes ADR-015 as Rejected. |
 
-### Answered 2026-10-02
+### Answered 2026-10-02 (afternoon)
+
+| # | Question | Answer | Effect on these requirements |
+|---|---|---|---|
+| **Q-01** | **Local model choice.** The brief names "laya" / "jev". | **Laya** — Convai Innovations' open-source "System 1 decision model" ([github.com/receptron/laya](https://github.com/receptron/laya)); ONNX weights ≈ 1.7 GB fp32, Apache-2.0; not a chat LLM, but a `choice`/`score`/`noul` probability model. Served via its own `laya-serve` reference server as a provisioned local sidecar ([ADR-014](../05-adr/014-laya-serving-resolution.md), 2026-10-04), not Ollama and not embedded in the Rust binary. | Sets the memory floor (≈ 2 GB resident per Laya's own docs, against the < 5 GB budget) and the model-path latency baseline (≈ 140 ms/3-question call, warm, on Apple-silicon CPU) — both still **secondary-source estimates**, per ADR-014, pending re-measurement against the package at the start of S-6; see [ADR-013](../05-adr/013-model-and-language-resolution.md) and [ADR-014](../05-adr/014-laya-serving-resolution.md). |
+| **Q-09** | **Single-language Rust?** Now that Q-06 answered with a TUI, nothing consumes the TypeScript half of [ADR-002](../05-adr/002-enforcement-core-language.md). | **Yes.** One Rust binary: enforcement core, CLI, and TUI (`ratatui`-class). No Node runtime in any configuration. | [ADR-002](../05-adr/002-enforcement-core-language.md) drops its TypeScript half outright; the schema-codegen build step is deleted from scope, not conditionally built. S-09's one-command install is one binary. |
+
+### Answered 2026-10-02 (morning)
 
 | # | Question | Answer | Effect on these requirements |
 |---|---|---|---|
@@ -618,7 +696,8 @@ only [ADR-012](../05-adr/012-supervised-exec-adapter.md), which is post-v1.
 - `.ai/context/project-brief.md` — source brief, including Background / Existing Problems
 - [`user-personas.md`](user-personas.md) — persona detail
 - [`../05-adr/011-v1-scope-envelope.md`](../05-adr/011-v1-scope-envelope.md) — the confirmation session of 2026-10-02 that answered Q-02 … Q-08, and the consequences of each answer
+- [`../05-adr/013-model-and-language-resolution.md`](../05-adr/013-model-and-language-resolution.md) — the same day's later session that answered Q-01 and Q-09, and the serving-mechanism open point it raises
 - [`../05-adr/010-supersede-adr-001-no-web-server-ui.md`](../05-adr/010-supersede-adr-001-no-web-server-ui.md) — supersedes ADR-001; the UI constraints that make a TUI the answer to Q-06
-- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-012 (Proposed), which answer the architectural questions these requirements raise; the index's "Blocked on human input" table lists Q-01 and Q-09 as approval blockers, plus Q-10 against ADR-012 as non-blocking
-- [`../05-adr/012-supervised-exec-adapter.md`](../05-adr/012-supervised-exec-adapter.md) — why FR-09's "process-level interception" clause is undesigned in v1, and the gap that leaves: a host CLI with neither hooks nor MCP traffic has no interception point, so under FR-10 every action it attempts is denied
+- [`../05-adr/README.md`](../05-adr/README.md) — ADR-002 … ADR-015 (Proposed), which answer the architectural questions these requirements raise; no ADR blocks Discovery or ADR approval any longer, and Q-10 blocks only [ADR-015](../05-adr/015-supervised-exec-adapter.md), which is post-v1
+- [`../05-adr/015-supervised-exec-adapter.md`](../05-adr/015-supervised-exec-adapter.md) — why FR-09's "process-level interception" clause is undesigned in v1, and the gap that leaves: a host CLI with neither hooks nor MCP traffic has no interception point, so under FR-10 every action it attempts is denied
 - [`../04-solution-design/`](../04-solution-design/) — Phase 4 documents, drafted ahead of the Phase 3 gate (see the note at the top of each)

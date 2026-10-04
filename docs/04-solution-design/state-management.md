@@ -81,8 +81,20 @@ component in the system: a stale hit is a wrong decision.
   another agent with a different confinement.
 - **Bounded**: LRU with a fixed entry cap, so a long session cannot grow past the < 250 MB engine
   memory budget.
-- Cache hits are logged as full audit records with `evaluator: 'cache'` and the originally
-  deciding rule ids — a hit is still a decision and FR-19 admits no gaps.
+- Cache hits are logged as full audit records with the originally deciding rule ids — a hit is still
+  a decision and FR-19 admits no gaps. **Phase 3 is canonical on how**: `evaluator` carries the
+  *original* evaluator rather than a `'cache'` value (the enum stays
+  `deterministic | hook | model`), and the hit is visible instead as the trace's first step —
+  `{ stage: 'cache', outcome: 'hit', reusedActionId, cacheKeyDigest }`
+  ([`../03-system-design/data-model.md`](../03-system-design/data-model.md) §5.4, §5.5). The reason
+  for that split: enforcement must not behave differently because a decision was cached, so the
+  decision fields are identical; evidence must still distinguish the two, so the trace records it.
+  A `'cache'` evaluator value would have made every query by evaluator mix wrong in a long session.
+- The cache **never serves a decision whose provenance differs from the current stamp.** The key
+  includes `policyVersion`; a guard upgrade, a matcher-set change, or a model swap changes the
+  provenance stamp and clears the cache. Otherwise a cached hit could be attributed, in evidence, to
+  a build that did not produce it — and `guard replay` would report an `unexplained` divergence that
+  was really a stale cache.
 
 ### A.4 Audit chain — single-writer serialisation
 
@@ -258,6 +270,8 @@ audit log when it simply cannot reach the engine actively misleads the person re
 | FR-11 (model off the hot path) | A.3 decision cache, A.5 bounded queue |
 | FR-16 (dry-run) | A.1 session registry mode; B.3 dry-run diff |
 | FR-19, FR-20 (log, tamper detection) | A.4 single-writer chain |
+| FR-30 (trace in every record) | A.3 cache-hit step and provenance-scoped key; A.4 one append covering verdict and trace |
+| FR-31, FR-32 (explain, replay) | A.3 — replay runs with the cache writer disabled, so inspecting history cannot seed future decisions |
 | FR-21 (query) | B.2, B.4 URL-encoded filters |
 | FR-23 (health) | A.1, B.2 |
 | FR-26 (hot reload) | A.2 atomic swap |
