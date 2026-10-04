@@ -99,7 +99,8 @@ Trade-off accepted, with a reservation recorded:
 
 1. ~~**Answer Q-01.**~~ **Done 2026-10-02** — the model is Laya
    ([ADR-013](013-model-and-language-resolution.md)). It gates ADR-005's accuracy and memory
-   budgets, but ADR-013 raises a new open point on how Laya is served; that is not yet settled.
+   budgets; the open point ADR-013 raised on how Laya is served is itself **resolved 2026-10-04**
+   ([ADR-014](014-laya-serving-resolution.md)).
 2. ~~**Resolve the language question this ADR opens**~~ **Done 2026-10-02** — single-language
    Rust, confirmed ([ADR-013](013-model-and-language-resolution.md)). See the open point below for
    the historical record of the recommendation; it is no longer pending.
@@ -111,12 +112,15 @@ Trade-off accepted, with a reservation recorded:
    makes them release blockers.
 6. Add WCAG 2.1 AA checks for the terminal and TUI surfaces to
    `../04-solution-design/testing-strategy.md`, which currently scopes accessibility to a web UI.
-7. Treat **clean removal as a Sprint 1 deliverable alongside the adapters** (S-25, FR-27,
-   ADR-007 items 10–12). It is not a release-blocking *gate* in the sense the accuracy gate is, but
-   it ships with the adapter that makes it necessary: the first adapter to write into a host's
-   config is the moment the product can brick a user's CLI, and R-01 names uninstall as the exit
-   path from the top risk. Shipping `install` without `uninstall` would make the acknowledged
-   remedy for a false-deny the thing that breaks the host.
+7. Treat clean removal as **a v1 release blocker, sequenced across the pre-release sprints**,
+   alongside the adapters (S-25, FR-27, ADR-007 items 10–12) — reworded 2026-10-04 at the owner's
+   confirmation, from the earlier "Sprint 1 deliverable" phrasing, because `uninstall` cannot be
+   fully built and tested in the same sprint as the first adapter it must undo, but it is as
+   release-blocking as the accuracy gate: the first adapter to write into a host's config is the
+   moment the product can brick a user's CLI, and R-01 names uninstall as the exit path from the
+   top risk. Shipping `install` without `uninstall` would make the acknowledged remedy for a
+   false-deny the thing that breaks the host — so removal must ship before v1 ships, even though it
+   is not a single Sprint-1 task.
 
 **One open point this ADR raises, for the owner to confirm**
 
@@ -160,7 +164,8 @@ ADR-002 is amended accordingly.
 **Related**: [ADR-013](013-model-and-language-resolution.md) (Q-01 and Q-09, answered later the
 same day) · [ADR-002](002-enforcement-core-language.md) (its TypeScript half is dropped) ·
 [ADR-004](004-layered-policy-model.md) · [ADR-005](005-pluggable-local-model-runtime.md) (model
-named; serving mechanism still open) · [ADR-007](007-cli-integration-strategy.md) (Q-04 answered) ·
+named; serving mechanism resolved by [ADR-014](014-laya-serving-resolution.md)) ·
+[ADR-007](007-cli-integration-strategy.md) (Q-04 answered) ·
 [ADR-008](008-sandbox-confinement-primitive.md) (Q-02, Q-03 answered — unblocked) ·
 [ADR-010](010-supersede-adr-001-no-web-server-ui.md) (Q-06 answered; item 2 closes with a TUI) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) Q-01 … Q-08, R-01 ·

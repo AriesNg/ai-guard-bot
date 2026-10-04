@@ -446,7 +446,7 @@ the product opens no TCP port in any configuration
 | **Day-one posture** | **Enforcing immediately** (Q-08). No dry-run grace period; `guard dry-run` is opt-in. |
 | **No inherited UI stack** | ADR-001 (Next.js/RSC) was scaffold boilerplate and is **superseded by [ADR-010](../05-adr/010-supersede-adr-001-no-web-server-ui.md)**: it binds nothing. The UI is a TUI, in-process, with no server runtime and no listener, read-only against the daemon. |
 | **Single-language Rust** | **Confirmed 2026-10-02** (Q-09, [ADR-013](../05-adr/013-model-and-language-resolution.md)): enforcement core, CLI, and TUI are one Rust binary. [ADR-002](../05-adr/002-enforcement-core-language.md) is amended accordingly; no Node runtime ships. |
-| **Local model runtime** | Pluggable (Ollama or equivalent) in the port's design — see [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). The model is named: **Laya** (Q-01, [ADR-013](../05-adr/013-model-and-language-resolution.md)), which is not Ollama-servable. How it is actually served is still open — ADR-005 item 2. |
+| **Local model runtime** | Pluggable in the port's design — see [ADR-005](../05-adr/005-pluggable-local-model-runtime.md). The model is named: **Laya** (Q-01, [ADR-013](../05-adr/013-model-and-language-resolution.md)), which is not Ollama-servable. It is served via its own `laya-serve` reference server as a local sidecar — ADR-005 item 2, resolved by [ADR-014](../05-adr/014-laya-serving-resolution.md). |
 | **No vendor SDK in the enforcement path** | And no cloud service in the policy-decision path. |
 | **Host agents unmodified** | Integration through documented hook/permission interfaces; no forks or patches — see [ADR-007](../05-adr/007-cli-integration-strategy.md). |
 | **Hardware floor** | Must run on a developer laptop with 16 GB RAM alongside the IDE and the agent — this caps model size and is the real constraint behind the latency targets. |
@@ -650,14 +650,15 @@ Carried from `.ai/context/project-brief.md` and extended. **All eight were answe
 owner on 2026-10-02** — seven in the requirements-confirmation session recorded as
 [ADR-011](../05-adr/011-v1-scope-envelope.md), and the remaining two (Q-01, Q-09) later the same
 day, recorded in [ADR-013](../05-adr/013-model-and-language-resolution.md). None block Discovery
-approval. ADR-013 raises one narrower open point of its own — how Laya is served — which blocks
-finalizing ADR-005 item 2, not Discovery.
+approval. ADR-013 raised one narrower open point of its own — how Laya is served — which the
+owner resolved on 2026-10-04 ([ADR-014](../05-adr/014-laya-serving-resolution.md)); it never
+blocked Discovery, only the finalizing of ADR-005 item 2.
 
 ### Answered 2026-10-02 (afternoon)
 
 | # | Question | Answer | Effect on these requirements |
 |---|---|---|---|
-| **Q-01** | **Local model choice.** The brief names "laya" / "jev". | **Laya** — Convai Innovations' open-source "System 1 decision model" ([github.com/receptron/laya](https://github.com/receptron/laya)); ONNX weights ≈ 1.7 GB fp32, Apache-2.0; not a chat LLM, but a `choice`/`score`/`noul` probability model. | Sets the memory floor (≈ 2 GB resident per Laya's own docs, against the < 5 GB budget) and the model-path latency baseline (≈ 140 ms/3-question call, warm, on Apple-silicon CPU) — **once ADR-005 item 2's serving mechanism is settled**; see [ADR-013](../05-adr/013-model-and-language-resolution.md). |
+| **Q-01** | **Local model choice.** The brief names "laya" / "jev". | **Laya** — Convai Innovations' open-source "System 1 decision model" ([github.com/receptron/laya](https://github.com/receptron/laya)); ONNX weights ≈ 1.7 GB fp32, Apache-2.0; not a chat LLM, but a `choice`/`score`/`noul` probability model. Served via its own `laya-serve` reference server as a provisioned local sidecar ([ADR-014](../05-adr/014-laya-serving-resolution.md), 2026-10-04), not Ollama and not embedded in the Rust binary. | Sets the memory floor (≈ 2 GB resident per Laya's own docs, against the < 5 GB budget) and the model-path latency baseline (≈ 140 ms/3-question call, warm, on Apple-silicon CPU) — both still **secondary-source estimates**, per ADR-014, pending re-measurement against the package at the start of S-6; see [ADR-013](../05-adr/013-model-and-language-resolution.md) and [ADR-014](../05-adr/014-laya-serving-resolution.md). |
 | **Q-09** | **Single-language Rust?** Now that Q-06 answered with a TUI, nothing consumes the TypeScript half of [ADR-002](../05-adr/002-enforcement-core-language.md). | **Yes.** One Rust binary: enforcement core, CLI, and TUI (`ratatui`-class). No Node runtime in any configuration. | [ADR-002](../05-adr/002-enforcement-core-language.md) drops its TypeScript half outright; the schema-codegen build step is deleted from scope, not conditionally built. S-09's one-command install is one binary. |
 
 ### Answered 2026-10-02 (morning)

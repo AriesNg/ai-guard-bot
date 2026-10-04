@@ -9,8 +9,9 @@ product owner on 2026-10-02 and are recorded in
 left open — **Q-01** (which local model) and **Q-09** (single-language Rust) — were answered later
 the same day and are recorded in
 [`../05-adr/013-model-and-language-resolution.md`](../05-adr/013-model-and-language-resolution.md).
-That ADR raises one narrower open point of its own (how Laya is served) — it does not reopen
-Discovery, which only required the model to be *named*.
+That ADR raised one narrower open point of its own (how Laya is served), resolved 2026-10-04 in
+[`../05-adr/014-laya-serving-resolution.md`](../05-adr/014-laya-serving-resolution.md) — it never
+reopened Discovery, which only required the model to be *named*.
 
 ## Purpose
 Understand the problem, users, market, and constraints before designing anything.
@@ -48,7 +49,7 @@ Understand the problem, users, market, and constraints before designing anything
 | Posture | Enforcing from the first action; dry-run is opt-in |
 | Timeline | Side project, intermittent — each sprint independently useful |
 | Traceability | Every decision carries its own trace inside the audit hash, with `guard explain` and `guard replay` ([ADR-012](../05-adr/012-decision-trace.md)) |
-| Local model | **Laya** (Convai Innovations, ONNX, ≈ 1.7 GB fp32 weights) — a "System 1 decision model" over `choice`/`score`/`noul` questions, not a chat LLM. How it is served is still open — [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2 |
+| Local model | **Laya** (Convai Innovations, ONNX, ≈ 1.7 GB fp32 weights) — a "System 1 decision model" over `choice`/`score`/`noul` questions, not a chat LLM. Served via its own `laya-serve` reference server as a local sidecar — [ADR-005](../05-adr/005-pluggable-local-model-runtime.md) item 2, [ADR-014](../05-adr/014-laya-serving-resolution.md) |
 | Implementation language | Single-language Rust — enforcement core, CLI, and TUI in one static binary. No Node runtime ships |
 
 Full reasoning and the consequences of each answer:

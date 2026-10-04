@@ -65,6 +65,12 @@ recommendation both made.
 
 ## One open point this ADR raises, for the owner to confirm
 
+> **Resolved 2026-10-04 by [ADR-014](014-laya-serving-resolution.md).** Neither of the two options
+> below was taken — the owner's session that day found a third: run Laya's own reference server as
+> a provisioned local sidecar, which needs neither an Ollama tag nor a Rust reimplementation. The
+> options as originally posed are left below unedited, as this ADR's record of what was considered
+> at the time.
+
 Naming Laya resolves Q-01's text but exposes a mismatch neither ADR-005 nor the brief anticipated.
 ADR-005 decision item 2 defaults to **"an Ollama-class local server"** for v1, and its Rejected
 Alternatives list **"embedding an inference library directly in the daemon"** as rejected for v1
@@ -123,6 +129,6 @@ not amended by this ADR.**
 **Related**: [ADR-011](011-v1-scope-envelope.md) (recorded the prior seven answers; raised Q-09) ·
 [ADR-002](002-enforcement-core-language.md) (Q-09 target — single-language Rust) ·
 [ADR-005](005-pluggable-local-model-runtime.md) (Q-01 target — model named; serving mechanism
-still open) ·
+resolved by [ADR-014](014-laya-serving-resolution.md)) ·
 [`../01-discovery/requirements.md`](../01-discovery/requirements.md) Q-01, Q-09 ·
 [`../01-discovery/README.md`](../01-discovery/README.md) (both were its sole blockers)
